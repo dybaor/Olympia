@@ -1,0 +1,19 @@
+# Môi trường ảo & Cache Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# File đóng gói ứng dụng (rất nặng, không nên đẩy lên Git)
+build/
+dist/
+*.spec
+
+# Bảo mật API Key (Cực kỳ quan trọng)
+.env
+*.env
+
+# Dữ liệu tạm & IDE
+.vscode/
+.idea/
+data/uploads/*

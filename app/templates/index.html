@@ -1,0 +1,1878 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đấu Trường Tri Thức | Olympic Arena & Practice Dojo</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            arena: {
+              900: '#070b19',
+              800: '#0d1527',
+              700: '#14203d',
+              gold: '#ffd700',
+              crimson: '#ef4444',
+              emerald: '#10b981',
+              cyan: '#06b6d4',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Canvas Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @keyframes starGlow {
+      0%, 100% { box-shadow: 0 0 15px rgba(255, 215, 0, 0.6); }
+      50% { box-shadow: 0 0 35px rgba(255, 215, 0, 1); }
+    }
+    .star-active {
+      animation: starGlow 1.5s infinite;
+      border-color: #ffd700 !important;
+      background: linear-gradient(135deg, rgba(255, 215, 0, 0.2), rgba(245, 158, 11, 0.2)) !important;
+    }
+  </style>
+</head>
+<body class="bg-arena-900 text-slate-100 min-h-screen font-sans selection:bg-arena-cyan selection:text-black">
+
+  <!-- TOP HEADER / HUD -->
+  <header class="border-b border-arena-700/80 bg-arena-800/90 backdrop-blur sticky top-0 z-50 px-4 py-3 shadow-xl">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center space-x-3 cursor-pointer" onclick="location.reload()">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 via-red-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
+          <i class="fa-solid fa-trophy text-white text-lg"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-orange-300 to-cyan-400 uppercase">
+            Đấu Trường Tri Thức
+          </h1>
+          <p class="text-xs text-slate-400">Olympic Arena & Practice Dojo • Multi-Agent Intelligence</p>
+        </div>
+      </div>
+
+      <!-- Live Match HUD -->
+      <div id="liveHUD" class="hidden flex items-center space-x-5">
+        <!-- Chế độ huy hiệu -->
+        <div id="hudModeBadge" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold uppercase">
+          <!-- Render động Arena vs Practice -->
+        </div>
+
+        <!-- Vòng thi hiện tại -->
+        <div class="flex items-center space-x-2 bg-arena-700/60 px-3 py-1.5 rounded-lg border border-slate-700">
+          <i class="fa-solid fa-flag-checkered text-cyan-400"></i>
+          <span id="hudRoundName" class="text-xs font-semibold uppercase text-cyan-300">Vòng 1</span>
+        </div>
+
+        <!-- Chuỗi thắng (Chỉ hiện khi Thi đấu) -->
+        <div id="hudStreakBox" class="flex items-center space-x-1.5 bg-arena-700/60 px-3 py-1.5 rounded-lg border border-orange-500/30">
+          <i class="fa-solid fa-fire text-orange-500 animate-pulse"></i>
+          <span class="text-xs text-slate-400">Chuỗi:</span>
+          <span id="hudStreak" class="text-sm font-bold text-orange-400">0</span>
+        </div>
+
+        <!-- Điểm số hiện tại -->
+        <div class="flex items-center space-x-2 bg-gradient-to-r from-amber-500/20 to-orange-500/20 px-4 py-1.5 rounded-lg border border-amber-500/50 shadow-inner">
+          <i class="fa-solid fa-coins text-amber-400"></i>
+          <span class="text-xs text-amber-200 uppercase font-semibold">Điểm:</span>
+          <span id="hudScore" class="text-xl font-extrabold text-amber-400 tracking-wider">0</span>
+        </div>
+
+        <!-- Âm thanh On/Off -->
+        <button id="toggleAudioBtn" onclick="toggleAudio()" class="text-slate-400 hover:text-white transition p-2" title="Bật/Tắt âm thanh">
+          <i id="audioIcon" class="fa-solid fa-volume-high text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex items-center space-x-3">
+        <button id="viewConceptMapBtn" onclick="openConceptModal()" class="hidden text-xs bg-arena-700 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-lg border border-slate-600 transition flex items-center space-x-1.5">
+          <i class="fa-solid fa-diagram-project text-cyan-400"></i>
+          <span>Bản Đồ Khái Niệm</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="max-w-5xl mx-auto px-4 py-8">
+
+    <!-- SCREEN 1: UPLOAD TÀI LIỆU -->
+    <div id="uploadScreen" class="space-y-8">
+      <div class="text-center space-y-3 max-w-2xl mx-auto">
+        <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-cyan-950/60 border border-cyan-500/30 text-cyan-400 text-xs font-medium">
+          <i class="fa-solid fa-microchip"></i>
+          <span>Multi-Agent Swarm Intelligence</span>
+        </div>
+        <h2 class="text-3xl md:text-4xl font-extrabold text-white tracking-tight">
+          Đấu Trường Olympic & Phòng Luyện Tập <br>
+          <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-orange-400 to-cyan-400">Từ Tài Liệu Học Thuật</span>
+        </h2>
+        <p class="text-sm text-slate-400">
+          Tải lên tài liệu (PDF, DOCX, Markdown, TXT). Hệ thống 5 Agent chuyên biệt sẽ tự động phân tầng tư duy Bloom, mở phòng cấu hình độ khó và đồng hành cùng bạn ở cả 2 chế độ: <b>Thi đấu đỉnh cao</b> hoặc <b>Luyện tập có gợi ý</b>.
+        </p>
+      </div>
+
+      <!-- MULTIPLAYER QUICK ACTION BUTTON -->
+      <div class="max-w-xl mx-auto flex items-center justify-center">
+        <button onclick="openJoinModal()" class="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white font-extrabold text-sm shadow-xl shadow-purple-600/30 flex items-center justify-center space-x-3 transition transform hover:-translate-y-0.5 border border-purple-400/40">
+          <i class="fa-solid fa-users text-lg"></i>
+          <span>THAM GIA PHÒNG ĐẤU MULTIPLAYER (NHẬP MÃ OLY-XXX)</span>
+        </button>
+      </div>
+
+      <!-- Drag & Drop Zone -->
+      <div class="max-w-xl mx-auto">
+        <div id="dropZone" class="border-2 border-dashed border-slate-700 hover:border-cyan-500 rounded-2xl p-8 text-center bg-arena-800/40 hover:bg-arena-800/80 transition duration-300 cursor-pointer relative group">
+          <input type="file" id="fileInput" accept=".pdf,.docx,.md,.txt" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+          <div class="space-y-4 pointer-events-none">
+            <div class="w-16 h-16 mx-auto rounded-2xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-3xl group-hover:scale-110 transition">
+              <i class="fa-solid fa-cloud-arrow-up"></i>
+            </div>
+            <div>
+              <p class="font-medium text-white">Kéo thả tài liệu vào đây hoặc <span class="text-cyan-400 underline">chọn từ máy tính</span></p>
+              <p class="text-xs text-slate-400 mt-1">Hỗ trợ PDF, DOCX, Markdown (.md), Plain Text (.txt)</p>
+            </div>
+            <div class="inline-flex items-center space-x-3 text-xs text-slate-400 bg-arena-900/60 px-4 py-1.5 rounded-full border border-slate-700">
+              <span><i class="fa-solid fa-check text-emerald-400 mr-1"></i> Phân tầng Bloom</span>
+              <span><i class="fa-solid fa-check text-emerald-400 mr-1"></i> Gợi ý 2 tầng</span>
+              <span><i class="fa-solid fa-check text-emerald-400 mr-1"></i> 100% Citation</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Progress Box -->
+        <div id="uploadProgressBox" class="hidden mt-6 bg-arena-800 border border-slate-700 rounded-xl p-5 space-y-4 shadow-xl">
+          <div class="flex items-center justify-between text-xs">
+            <span id="uploadStageText" class="font-semibold text-cyan-400 flex items-center gap-2">
+              <i class="fa-solid fa-spinner fa-spin"></i> Agent 1 đang bóc tách & phân tầng Bloom...
+            </span>
+          </div>
+          <div class="w-full bg-arena-900 rounded-full h-2 overflow-hidden border border-slate-700">
+            <div id="uploadProgressBar" class="bg-gradient-to-r from-cyan-500 via-amber-500 to-emerald-500 h-2 rounded-full transition-all duration-500" style="width: 45%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: PRE-MATCH SETUP / MATCH LOBBY (PHÒNG CẤU HÌNH TRẬN ĐẤU) -->
+    <div id="lobbyScreen" class="hidden space-y-8 max-w-4xl mx-auto">
+      <div class="bg-arena-800/90 border border-slate-700 rounded-2xl p-6 shadow-2xl space-y-6">
+        
+        <!-- Header Document Info -->
+        <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-700/80 pb-4">
+          <div>
+            <span class="text-xs text-slate-400 uppercase font-semibold">Tài liệu đã bóc tách thành công</span>
+            <h3 id="lobbyDocTitle" class="text-xl font-bold text-white mt-0.5">Tên tài liệu</h3>
+          </div>
+          <div class="flex gap-2 text-xs">
+            <span id="lobbyChunkBadge" class="bg-arena-900 px-3 py-1.5 rounded-lg border border-slate-700 text-cyan-400 font-mono">0 Chunks</span>
+            <span id="lobbyBloomBadge" class="bg-arena-900 px-3 py-1.5 rounded-lg border border-slate-700 text-amber-400">Bloom: Đầy đủ 4 tầng</span>
+          </div>
+        </div>
+
+        <!-- CHỌN CHẾ ĐỘ THI ĐẤU HAY LUYỆN TẬP -->
+        <div class="space-y-3">
+          <label class="text-xs font-bold uppercase tracking-wider text-slate-300">1. Chọn Chế Độ Trải Nghiệm</label>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            
+            <!-- Card Thi đấu Đơn -->
+            <div id="modeCardArena" onclick="selectMode('ARENA_COMPETITION')" class="cursor-pointer p-4 rounded-xl border-2 border-amber-500 bg-amber-950/20 hover:bg-amber-950/30 transition space-y-2 relative">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-amber-400 text-xs flex items-center gap-1.5">
+                  <i class="fa-solid fa-trophy"></i> THI ĐẤU ĐƠN
+                </span>
+                <span id="arenaCheckIcon" class="w-5 h-5 rounded-full bg-amber-500 text-black flex items-center justify-center text-xs font-bold">✓</span>
+              </div>
+              <p class="text-[11px] text-slate-300 leading-relaxed">
+                Đếm ngược từng giây, khóa đáp án khi hết giờ, khóa gợi ý, thưởng chuỗi streak và cược Ngôi sao hy vọng.
+              </p>
+            </div>
+
+            <!-- Card Luyện tập -->
+            <div id="modeCardPractice" onclick="selectMode('PRACTICE_DOJO')" class="cursor-pointer p-4 rounded-xl border border-slate-700 bg-arena-900/60 hover:bg-arena-700/40 transition space-y-2 relative">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-cyan-400 text-xs flex items-center gap-1.5">
+                  <i class="fa-solid fa-graduation-cap"></i> PHÒNG LUYỆN TẬP
+                </span>
+                <span id="practiceCheckIcon" class="w-5 h-5 rounded-full border border-slate-600 hidden text-xs font-bold"></span>
+              </div>
+              <p class="text-[11px] text-slate-300 leading-relaxed">
+                Không áp lực thời gian, mở 2 tầng gợi ý, hiển thị giải thích từng bước ngay sau khi chọn, làm lại câu hỏi tương tự.
+              </p>
+            </div>
+
+            <!-- Card Đấu Nhiều Người Real-time -->
+            <div id="modeCardMultiplayer" onclick="selectMode('MULTIPLAYER_ARENA')" class="cursor-pointer p-4 rounded-xl border border-slate-700 bg-arena-900/60 hover:bg-arena-700/40 transition space-y-2 relative">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-purple-400 text-xs flex items-center gap-1.5">
+                  <i class="fa-solid fa-users"></i> ĐẤU MULTIPLAYER
+                </span>
+                <span id="multiplayerCheckIcon" class="w-5 h-5 rounded-full border border-slate-600 hidden text-xs font-bold"></span>
+              </div>
+              <p class="text-[11px] text-slate-300 leading-relaxed">
+                Tạo phòng 6 ký tự (OLY-XXX), đồng bộ câu hỏi & bảng xếp hạng thời gian thực, cược sao công khai cả phòng.
+              </p>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- THÔNG TIN CHỦ PHÒNG MULTIPLAYER (Chỉ hiện khi chọn MULTIPLAYER_ARENA) -->
+        <div id="multiplayerHostSection" class="hidden space-y-2 bg-purple-950/30 p-4 rounded-xl border border-purple-500/40">
+          <label class="text-xs font-bold text-purple-300 uppercase flex items-center gap-1.5">
+            <i class="fa-solid fa-crown text-amber-400"></i> Biệt danh Chủ phòng (Host Nickname):
+          </label>
+          <input type="text" id="hostNicknameInput" value="Chủ Phòng Olympic" placeholder="Nhập biệt danh của bạn..." class="w-full bg-arena-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-400" />
+        </div>
+        </div>
+
+        <!-- BỘ LỌC LUYỆN TẬP (Chỉ hiện khi chọn PRACTICE_DOJO) -->
+        <div id="practiceFilterSection" class="hidden space-y-2 bg-arena-900/80 p-4 rounded-xl border border-cyan-800/50">
+          <label class="text-xs font-bold text-cyan-300 uppercase">Phạm Vi Luyện Tập:</label>
+          <select id="practiceFilterSelect" class="w-full bg-arena-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500">
+            <option value="ALL_ROUNDS">Luyện tập toàn bộ 4 vòng thi</option>
+            <option value="ONLY_ROUND_1">Chỉ tập trung: Vòng 1 (Khởi động - Nhận diện tốc độ)</option>
+            <option value="ONLY_ROUND_2">Chỉ tập trung: Vòng 2 (Vượt chướng ngại vật - Tư duy liên kết)</option>
+            <option value="ONLY_ROUND_3">Chỉ tập trung: Vòng 3 (Tăng tốc - Tình huống suy luận đa bước)</option>
+            <option value="ONLY_ROUND_4">Chỉ tập trung: Vòng 4 (Về đích - Phản biện & Điều kiện biên)</option>
+          </select>
+        </div>
+
+        <!-- CẤU HÌNH THỜI GIAN & ĐỘ KHÓ 4 VÒNG -->
+        <div class="space-y-4">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-bold uppercase tracking-wider text-slate-300">2. Tùy Chỉnh Độ Khó & Thời Gian 4 Vòng</label>
+            <span class="text-[11px] text-slate-400">Tham số hóa linh hoạt bởi Dynamic Olympic Architect</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            <!-- VÒNG 1 -->
+            <div class="bg-arena-900 p-4 rounded-xl border border-slate-700/80 space-y-3">
+              <div class="flex items-center justify-between font-bold text-xs text-amber-400">
+                <span>VÒNG 1: KHỞI ĐỘNG</span>
+                <span class="text-slate-400 font-normal">Trắc nghiệm nhanh</span>
+              </div>
+              <div class="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label class="text-slate-400 text-[10px] uppercase">Độ khó:</label>
+                  <select id="diffR1" class="w-full mt-1 bg-arena-800 border border-slate-700 rounded-lg p-1.5 text-white">
+                    <option value="EASY">Dễ (Easy)</option>
+                    <option value="MEDIUM" selected>Trung bình (Medium)</option>
+                    <option value="HARD">Khó (Hard)</option>
+                    <option value="EXTREME">Cực hạn (Extreme)</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="text-slate-400 text-[10px] uppercase">Thời gian/câu:</label>
+                  <div class="flex items-center gap-2 mt-1">
+                    <input type="range" id="timeR1" min="5" max="30" value="15" oninput="document.getElementById('lblTimeR1').innerText = this.value + 's'" class="flex-1 accent-cyan-400" />
+                    <span id="lblTimeR1" class="text-cyan-400 font-mono w-8 text-right font-bold">15s</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- VÒNG 2 -->
+            <div class="bg-arena-900 p-4 rounded-xl border border-slate-700/80 space-y-3">
+              <div class="flex items-center justify-between font-bold text-xs text-cyan-400">
+                <span>VÒNG 2: VƯỢT CHƯỚNG NGẠI VẬT</span>
+                <span class="text-slate-400 font-normal">Từ khóa ẩn</span>
+              </div>
+              <div class="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label class="text-slate-400 text-[10px] uppercase">Độ khó:</label>
+                  <select id="diffR2" class="w-full mt-1 bg-arena-800 border border-slate-700 rounded-lg p-1.5 text-white">
+                    <option value="EASY">Dễ (Easy)</option>
+                    <option value="MEDIUM" selected>Trung bình (Medium)</option>
+                    <option value="HARD">Khó (Hard)</option>
+                    <option value="EXTREME">Cực hạn (Extreme)</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="text-slate-400 text-[10px] uppercase">Thời gian/câu:</label>
+                  <div class="flex items-center gap-2 mt-1">
+                    <input type="range" id="timeR2" min="10" max="45" value="20" oninput="document.getElementById('lblTimeR2').innerText = this.value + 's'" class="flex-1 accent-cyan-400" />
+                    <span id="lblTimeR2" class="text-cyan-400 font-mono w-8 text-right font-bold">20s</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- VÒNG 3 -->
+            <div class="bg-arena-900 p-4 rounded-xl border border-slate-700/80 space-y-3">
+              <div class="flex items-center justify-between font-bold text-xs text-orange-400">
+                <span>VÒNG 3: TĂNG TỐC</span>
+                <span class="text-slate-400 font-normal">Tình huống đa bước</span>
+              </div>
+              <div class="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label class="text-slate-400 text-[10px] uppercase">Độ khó:</label>
+                  <select id="diffR3" class="w-full mt-1 bg-arena-800 border border-slate-700 rounded-lg p-1.5 text-white">
+                    <option value="EASY">Dễ (Easy)</option>
+                    <option value="MEDIUM">Trung bình (Medium)</option>
+                    <option value="HARD" selected>Khó (Hard)</option>
+                    <option value="EXTREME">Cực hạn (Extreme)</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="text-slate-400 text-[10px] uppercase">Thời gian/câu:</label>
+                  <div class="flex items-center gap-2 mt-1">
+                    <input type="range" id="timeR3" min="15" max="60" value="30" oninput="document.getElementById('lblTimeR3').innerText = this.value + 's'" class="flex-1 accent-cyan-400" />
+                    <span id="lblTimeR3" class="text-cyan-400 font-mono w-8 text-right font-bold">30s</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- VÒNG 4 -->
+            <div class="bg-arena-900 p-4 rounded-xl border border-slate-700/80 space-y-3">
+              <div class="flex items-center justify-between font-bold text-xs text-emerald-400">
+                <span>VÒNG 4: VỀ ĐÍCH</span>
+                <span class="text-slate-400 font-normal">Phản biện & Cược sao</span>
+              </div>
+              <div class="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label class="text-slate-400 text-[10px] uppercase">Độ khó:</label>
+                  <select id="diffR4" class="w-full mt-1 bg-arena-800 border border-slate-700 rounded-lg p-1.5 text-white">
+                    <option value="EASY">Dễ (Easy)</option>
+                    <option value="MEDIUM">Trung bình (Medium)</option>
+                    <option value="HARD" selected>Khó (Hard)</option>
+                    <option value="EXTREME">Cực hạn (Extreme)</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="text-slate-400 text-[10px] uppercase">Thời gian/câu:</label>
+                  <div class="flex items-center gap-2 mt-1">
+                    <input type="range" id="timeR4" min="20" max="90" value="45" oninput="document.getElementById('lblTimeR4').innerText = this.value + 's'" class="flex-1 accent-cyan-400" />
+                    <span id="lblTimeR4" class="text-cyan-400 font-mono w-8 text-right font-bold">45s</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ACTION BUTTONS -->
+        <div class="pt-4 flex flex-wrap items-center justify-end gap-3 border-t border-slate-700/80">
+          <button onclick="launchMatch()" id="launchBtn" class="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-arena-900 font-black text-sm px-8 py-3 rounded-xl shadow-xl transition flex items-center space-x-2">
+            <i class="fa-solid fa-play"></i>
+            <span id="launchBtnText">BẮT ĐẦU TRANH TÀI OLYMPIC</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- SCREEN 2.5: MULTIPLAYER WAITING LOBBY (SẢNH CHỜ PHÒNG ĐẤU) -->
+    <div id="multiplayerLobbyScreen" class="hidden space-y-6 max-w-3xl mx-auto">
+      <div class="bg-arena-800/95 border border-purple-500/40 rounded-2xl p-6 shadow-2xl space-y-6">
+        
+        <!-- Room Code & Invite Banner -->
+        <div class="text-center space-y-2 border-b border-slate-700/80 pb-6">
+          <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-purple-950 text-purple-300 text-xs font-semibold border border-purple-600/40">
+            <i class="fa-solid fa-wifi animate-pulse text-emerald-400"></i>
+            <span>Sảnh Chờ Thi Đấu Thời Gian Thực (WebSocket Sync)</span>
+          </div>
+          <h2 class="text-2xl font-black text-white">MÃ PHÒNG THI ĐẤU</h2>
+          <div class="flex items-center justify-center gap-3 pt-1">
+            <span id="mpRoomCodeDisplay" class="text-4xl md:text-5xl font-extrabold tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-pink-400 to-purple-400 font-mono">
+              OLY-000
+            </span>
+            <button onclick="copyRoomCode()" class="p-2.5 rounded-xl bg-arena-700 hover:bg-slate-700 text-slate-200 border border-slate-600 transition" title="Sao chép mã phòng">
+              <i class="fa-regular fa-copy text-lg"></i>
+            </button>
+          </div>
+          <p class="text-xs text-slate-400">Chia sẻ mã 6 ký tự hoặc link trực tiếp cho bạn bè cùng vào so tài</p>
+          <div class="pt-2">
+            <button onclick="copyInviteLink()" class="text-xs text-purple-300 hover:text-purple-200 underline font-medium">
+              <i class="fa-solid fa-link mr-1"></i> Sao chép liên kết mời trực tiếp
+            </button>
+          </div>
+        </div>
+
+        <!-- Participants Roster -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+              <i class="fa-solid fa-users text-cyan-400"></i> Danh Sách Người Chơi Đang Tham Gia (<span id="mpPlayerCount">1</span>)
+            </span>
+            <span class="text-[11px] text-emerald-400 flex items-center gap-1">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> Đồng bộ tự động
+            </span>
+          </div>
+          <div id="mpPlayerList" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <!-- Player Cards rendered dynamically -->
+          </div>
+        </div>
+
+        <!-- Host vs Player Action -->
+        <div class="pt-4 border-t border-slate-700/80 flex flex-col items-center justify-center space-y-3">
+          <!-- Button chỉ dành cho Host -->
+          <div id="mpHostControls" class="w-full flex justify-center">
+            <button onclick="mpStartGameHost()" class="w-full md:w-auto bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-arena-900 font-black text-sm px-10 py-3.5 rounded-xl shadow-xl transition transform hover:scale-105 flex items-center justify-center space-x-2">
+              <i class="fa-solid fa-rocket text-base"></i>
+              <span>BẮT ĐẦU TRẬN ĐẤU (CHỦ PHÒNG)</span>
+            </button>
+          </div>
+          <!-- Banner chờ dành cho Guest -->
+          <div id="mpGuestControls" class="hidden w-full text-center py-2 px-4 rounded-xl bg-arena-900/80 border border-slate-700">
+            <p class="text-xs text-cyan-300 font-semibold flex items-center justify-center gap-2">
+              <i class="fa-solid fa-hourglass-half fa-spin text-amber-400"></i>
+              Đang chờ Chủ phòng ấn nút bắt đầu trận đấu...
+            </p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- SCREEN 3: LIVE STAGE (THI ĐẤU HOẶC LUYỆN TẬP) -->
+    <div id="stageScreen" class="hidden space-y-6">
+
+      <!-- Navigation & Mode Alert Banner -->
+      <div class="flex items-center justify-between bg-arena-800/90 p-4 rounded-xl border border-slate-700 shadow-md">
+        <div class="flex items-center space-x-3">
+          <span id="roundBadge" class="px-2.5 py-1 text-xs font-bold rounded uppercase">
+            VÒNG 1
+          </span>
+          <div>
+            <h3 id="roundTitle" class="font-bold text-white text-base">Tên Vòng</h3>
+            <p id="roundTheme" class="text-xs text-slate-400">Chủ đề vòng thi</p>
+          </div>
+        </div>
+
+        <div class="flex items-center space-x-4">
+          <div class="text-right">
+            <p class="text-xs text-slate-400">Câu hỏi</p>
+            <p class="text-sm font-bold text-white"><span id="currentQuestionNum">1</span> / <span id="totalRoundQuestions">8</span></p>
+          </div>
+
+          <!-- Timer Box -->
+          <div id="timerBox" class="w-12 h-12 rounded-xl bg-arena-900 border-2 border-cyan-500 flex flex-col items-center justify-center shadow-lg transition-all">
+            <span id="timerText" class="text-lg font-black text-cyan-400 font-mono">15</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- PRACTICE DOJO TOOLBAR (Chỉ hiện khi ở chế độ Luyện tập) -->
+      <div id="practiceToolbar" class="hidden bg-cyan-950/30 border border-cyan-500/40 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center space-x-2 text-cyan-300 text-xs font-medium">
+          <i class="fa-solid fa-graduation-cap text-cyan-400 text-sm"></i>
+          <span>Chế độ Luyện tập: Thử thách không áp lực thời gian, được phép xem 2 tầng gợi ý.</span>
+        </div>
+        <div class="flex items-center space-x-2">
+          <button id="btnHint1" onclick="fetchHint(1)" class="px-3 py-1.5 rounded-lg bg-arena-800 hover:bg-cyan-900 text-cyan-300 border border-cyan-700/60 text-xs font-semibold flex items-center gap-1.5 transition">
+            <i class="fa-regular fa-lightbulb"></i> Gợi ý Cấp 1 (Tư duy)
+          </button>
+          <button id="btnHint2" onclick="fetchHint(2)" class="px-3 py-1.5 rounded-lg bg-arena-800 hover:bg-cyan-900 text-cyan-300 border border-cyan-700/60 text-xs font-semibold flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-key"></i> Gợi ý Cấp 2 (Manh mối)
+          </button>
+        </div>
+      </div>
+
+      <!-- HINT DISPLAY BOX (Ẩn ban đầu) -->
+      <div id="hintDisplayBox" class="hidden p-3.5 rounded-xl bg-cyan-950/60 border border-cyan-500/60 text-xs text-cyan-200 space-y-1">
+        <div class="font-bold flex items-center gap-1.5 text-cyan-300">
+          <i class="fa-solid fa-circle-info"></i> <span id="hintTitle">Gợi ý</span>
+        </div>
+        <p id="hintContent" class="leading-relaxed"></p>
+      </div>
+
+      <!-- MULTIPLAYER LIVE LEADERBOARD (MINI PANEL) -->
+      <div id="mpMiniLeaderboard" class="hidden bg-arena-800/90 border border-purple-500/30 rounded-xl p-3.5 space-y-2 shadow-lg">
+        <div class="flex items-center justify-between text-xs">
+          <span class="font-bold text-purple-300 uppercase flex items-center gap-1.5">
+            <i class="fa-solid fa-ranking-star text-amber-400"></i> Bảng Xếp Hạng Trực Tiếp (Live Leaderboard)
+          </span>
+          <span id="mpSubmissionStatus" class="text-[11px] text-cyan-400 font-mono font-bold">0/0 đã nộp</span>
+        </div>
+        <div id="mpMiniLeaderboardRows" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2"></div>
+      </div>
+
+      <!-- MULTIPLAYER STAR ANNOUNCEMENT TOAST -->
+      <div id="mpLiveBanner" class="hidden p-3 rounded-xl bg-gradient-to-r from-amber-950/80 via-purple-950/80 to-arena-800 border border-amber-500/60 text-amber-300 text-xs flex items-center justify-between shadow-xl">
+        <span id="mpLiveBannerText" class="font-bold flex items-center gap-2">
+          <i class="fa-solid fa-star text-amber-400 animate-spin"></i> Thông báo trận đấu
+        </span>
+      </div>
+
+      <!-- STAR OF HOPE (Chỉ Vòng 4 ở Chế độ Arena) -->
+      <div id="starOfHopeContainer" class="hidden bg-gradient-to-r from-amber-950/40 to-arena-800 border border-amber-500/40 rounded-xl p-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <div class="text-amber-400 text-2xl">
+            <i class="fa-solid fa-star"></i>
+          </div>
+          <div>
+            <h4 class="font-bold text-amber-300 text-sm">Cơ chế Ngôi Sao Hy Vọng (Star of Hope)</h4>
+            <p class="text-xs text-slate-300">Đúng: x2 số điểm câu hỏi (+60đ). Sai: Trừ 30 điểm.</p>
+          </div>
+        </div>
+        <button id="starOfHopeBtn" onclick="toggleStarOfHope()" class="px-4 py-2 rounded-lg bg-arena-700 hover:bg-amber-600/30 text-amber-400 font-bold text-xs border border-amber-500/50 transition flex items-center space-x-2">
+          <i class="fa-regular fa-star"></i>
+          <span>ĐẶT NGÔI SAO HY VỌNG</span>
+        </button>
+      </div>
+
+      <!-- OBSTACLE KEYWORD MINI-HUD (Vòng 2) -->
+      <div id="obstacleBoard" class="hidden bg-arena-800/90 border border-cyan-500/30 rounded-xl p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-2">
+            <i class="fa-solid fa-key text-cyan-400"></i>
+            <span class="text-xs font-bold text-cyan-300 uppercase">Chướng Ngại Vật Ẩn Số</span>
+          </div>
+          <button onclick="promptSolveObstacle()" class="text-xs font-bold bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 text-white px-3 py-1.5 rounded-lg shadow-lg flex items-center space-x-1.5 animate-pulse">
+            <i class="fa-solid fa-bell"></i>
+            <span>BẤM CHUÔNG ĐOÁN CNV (+80đ)</span>
+          </button>
+        </div>
+        <div id="obstacleLetters" class="flex flex-wrap gap-2 justify-center py-2"></div>
+      </div>
+
+      <!-- QUESTION DISPLAY CARD -->
+      <div id="questionCard" class="bg-arena-800 rounded-2xl border border-slate-700 p-6 md:p-8 space-y-6 shadow-2xl relative">
+        
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span id="dimensionBadge" class="text-[11px] font-semibold px-3 py-1 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800">
+              Khái niệm
+            </span>
+            <span id="bloomBadge" class="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-slate-900 text-slate-300 border border-slate-700">
+              Bloom
+            </span>
+          </div>
+          <span id="baseScoreTag" class="text-xs text-amber-400 font-semibold">+10 điểm</span>
+        </div>
+
+        <h2 id="questionPrompt" class="text-lg md:text-xl font-medium text-slate-100 leading-relaxed min-h-[50px]">
+          Nội dung câu hỏi...
+        </h2>
+
+        <div id="optionsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2"></div>
+
+        <!-- FEEDBACK CARD (Hiện sau khi trả lời) -->
+        <div id="feedbackBox" class="hidden mt-6 p-5 rounded-xl border space-y-3 transition-all">
+          <div class="flex items-center justify-between">
+            <div id="feedbackTitle" class="flex items-center space-x-2 font-bold text-base"></div>
+            <div id="feedbackScoreDelta" class="text-sm font-extrabold font-mono"></div>
+          </div>
+
+          <!-- Lời giải & suy luận từng bước (Chế độ Luyện tập) -->
+          <div class="text-xs text-slate-300 leading-relaxed border-t border-slate-700/60 pt-2 space-y-2">
+            <p class="font-semibold text-slate-200">Lời giải thích chi tiết:</p>
+            <p id="feedbackExplanation" class="text-slate-300"></p>
+
+            <div id="stepsContainer" class="space-y-1 bg-arena-900/60 p-3 rounded-lg border border-slate-700/60">
+              <p class="font-bold text-cyan-400 text-[11px]"><i class="fa-solid fa-list-check mr-1"></i> Từng bước suy luận logic:</p>
+              <ul id="stepsList" class="space-y-1 list-none pl-1 text-[11px] text-slate-300"></ul>
+            </div>
+          </div>
+
+          <!-- Trích dẫn nguồn -->
+          <div class="text-xs bg-arena-900/80 p-3 rounded-lg border border-slate-700 space-y-1">
+            <div class="flex items-center space-x-1.5 text-cyan-400 font-semibold text-[11px]">
+              <i class="fa-solid fa-quote-left"></i>
+              <span>Căn cứ trích dẫn:</span>
+              <span id="citationChunkId" class="text-slate-400 font-mono"></span>
+              <span>-</span>
+              <span id="citationSection" class="text-amber-300"></span>
+            </div>
+            <p id="citationQuote" class="italic text-slate-400 text-[11px] border-l-2 border-cyan-500 pl-2"></p>
+          </div>
+
+          <!-- Nút chuyển tiếp & Làm lại (Practice) -->
+          <div class="pt-2 flex items-center justify-between">
+            <div id="practiceRetryButtons" class="hidden flex gap-2">
+              <button onclick="retryCurrentQuestion()" class="bg-arena-700 hover:bg-slate-700 text-slate-200 text-xs font-semibold px-3 py-2 rounded-lg border border-slate-600 transition">
+                <i class="fa-solid fa-rotate-left mr-1"></i> Làm lại câu này
+              </button>
+              <button onclick="requestQuestionVariant()" class="bg-cyan-900/80 hover:bg-cyan-800 text-cyan-300 text-xs font-semibold px-3 py-2 rounded-lg border border-cyan-700/60 transition">
+                <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Luyện câu hỏi tương tự (Variant)
+              </button>
+            </div>
+            <button id="nextQuestionBtn" onclick="nextQuestion()" class="ml-auto bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-lg transition">
+              CÂU TIẾP THEO <i class="fa-solid fa-arrow-right ml-1"></i>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- SCREEN 4: SUMMARY & RADAR -->
+    <div id="summaryScreen" class="hidden space-y-8">
+      <div class="text-center space-y-2">
+        <div class="w-16 h-16 mx-auto rounded-full bg-gradient-to-tr from-amber-400 to-orange-500 flex items-center justify-center text-3xl text-arena-900 font-extrabold shadow-xl shadow-amber-500/20">
+          <i class="fa-solid fa-award"></i>
+        </div>
+        <h2 id="summaryHeading" class="text-3xl font-extrabold text-white">HOÀN THÀNH PHIÊN</h2>
+        <p id="summaryDocTitle" class="text-sm text-cyan-400 font-medium"></p>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-arena-800 p-4 rounded-xl border border-slate-700 text-center">
+          <p class="text-xs text-slate-400">Tổng Điểm</p>
+          <p id="sumTotalScore" class="text-3xl font-extrabold text-amber-400 mt-1">0</p>
+        </div>
+        <div class="bg-arena-800 p-4 rounded-xl border border-slate-700 text-center">
+          <p class="text-xs text-slate-400">Chuỗi Đúng Tối Đa</p>
+          <p id="sumMaxStreak" class="text-3xl font-extrabold text-orange-400 mt-1">0</p>
+        </div>
+        <div class="bg-arena-800 p-4 rounded-xl border border-slate-700 text-center">
+          <p class="text-xs text-slate-400">Thời Gian</p>
+          <p id="sumTimeSpent" class="text-3xl font-extrabold text-cyan-400 mt-1">0s</p>
+        </div>
+        <div class="bg-arena-800 p-4 rounded-xl border border-slate-700 text-center">
+          <p class="text-xs text-slate-400">Gợi Ý Đã Dùng</p>
+          <p id="sumHintsUsed" class="text-3xl font-extrabold text-emerald-400 mt-1">0</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+        <div class="bg-arena-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4">
+          <h4 class="font-bold text-white text-sm flex items-center space-x-2">
+            <i class="fa-solid fa-chart-pie text-cyan-400"></i>
+            <span>Biểu Đồ Radar 5 Chiều Nhận Thức</span>
+          </h4>
+          <div class="h-64 flex items-center justify-center">
+            <canvas id="radarChart"></canvas>
+          </div>
+        </div>
+
+        <div class="bg-arena-800 p-6 rounded-2xl border border-slate-700 shadow-xl space-y-4 text-xs">
+          <div>
+            <h4 class="font-bold text-emerald-400 uppercase flex items-center gap-1.5 mb-1.5">
+              <i class="fa-solid fa-circle-check"></i> Điểm Mạnh Vượt Trội
+            </h4>
+            <ul id="strengthsList" class="space-y-1 text-slate-300"></ul>
+          </div>
+          <div class="border-t border-slate-700 pt-3">
+            <h4 class="font-bold text-crimson uppercase flex items-center gap-1.5 mb-1.5">
+              <i class="fa-solid fa-triangle-exclamation"></i> Lỗ Hổng Kiến Thức Cần Củng Cố
+            </h4>
+            <ul id="gapsList" class="space-y-1 text-slate-300"></ul>
+          </div>
+          <div class="border-t border-slate-700 pt-3">
+            <h4 class="font-bold text-amber-400 uppercase flex items-center gap-1.5 mb-1.5">
+              <i class="fa-solid fa-lightbulb"></i> Khuyến Nghị Hành Động
+            </h4>
+            <ul id="recommendationsList" class="space-y-1 text-slate-400"></ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="text-center pt-4 flex justify-center gap-3">
+        <button onclick="returnToLobby()" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs px-6 py-3 rounded-xl shadow-lg transition">
+          <i class="fa-solid fa-sliders mr-2"></i> ĐIỀU CHỈNH CẤU HÌNH & THI TIẾP
+        </button>
+        <button onclick="location.reload()" class="bg-arena-700 hover:bg-slate-700 text-white font-bold text-xs px-6 py-3 rounded-xl border border-slate-600 transition">
+          <i class="fa-solid fa-rotate-right mr-2"></i> TẢI TÀI LIỆU MỚI
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- MODAL: BẢN ĐỒ KHÁI NIỆM -->
+  <div id="conceptModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-arena-800 border border-slate-700 rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl">
+      <div class="p-4 border-b border-slate-700 flex items-center justify-between">
+        <h3 class="font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-diagram-project text-cyan-400"></i> Bản Đồ Khái Niệm Tri Thức (Concept Map)
+        </h3>
+        <button onclick="closeConceptModal()" class="text-slate-400 hover:text-white p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <div id="conceptModalBody" class="p-6 overflow-y-auto space-y-6 text-xs text-slate-300"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: NHẬP MÃ PHÒNG MULTIPLAYER (JOIN ROOM) -->
+  <div id="joinRoomModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-arena-800 border border-purple-500/40 rounded-2xl max-w-md w-full shadow-2xl p-6 space-y-5">
+      <div class="flex items-center justify-between border-b border-slate-700 pb-3">
+        <h3 class="font-bold text-white flex items-center gap-2 text-base">
+          <i class="fa-solid fa-users text-purple-400"></i> Tham Gia Phòng Đấu Olympic
+        </h3>
+        <button onclick="closeJoinModal()" class="text-slate-400 hover:text-white p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <div class="space-y-4 text-xs">
+        <div>
+          <label class="text-slate-300 font-semibold block mb-1">Mã Phòng Thi Đấu (6 ký tự, ví dụ: OLY-839):</label>
+          <input type="text" id="joinRoomCodeInput" placeholder="OLY-..." class="w-full uppercase font-mono tracking-wider font-bold text-base bg-arena-900 border border-slate-700 focus:border-purple-400 rounded-xl px-4 py-2.5 text-white focus:outline-none" />
+        </div>
+
+        <div>
+          <label class="text-slate-300 font-semibold block mb-1">Biệt danh của bạn (Nickname):</label>
+          <input type="text" id="joinNicknameInput" placeholder="Ví dụ: Chiến Binh Tri Thức..." class="w-full bg-arena-900 border border-slate-700 focus:border-purple-400 rounded-xl px-4 py-2.5 text-white focus:outline-none" />
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-3 pt-2 border-t border-slate-700">
+        <button onclick="closeJoinModal()" class="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white transition">Hủy</button>
+        <button onclick="submitJoinRoom()" class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-xs shadow-lg shadow-purple-600/30 transition">
+          <i class="fa-solid fa-right-to-bracket mr-1.5"></i> VÀO PHÒNG
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ÂM THANH BẰNG WEB AUDIO API
+    class SoundSynthesizer {
+      constructor() {
+        this.ctx = null;
+        this.enabled = true;
+      }
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioContext();
+        }
+      }
+      playTick() {
+        if (!this.enabled) return;
+        this.init();
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+        gain.gain.setValueAtTime(0.04, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 0.04);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.04);
+      }
+      playCorrect() {
+        if (!this.enabled) return;
+        this.init();
+        const now = this.ctx.currentTime;
+        [523.25, 659.25, 783.99, 1046.50].forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+          gain.gain.setValueAtTime(0.12, now + idx * 0.08);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.25);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now + idx * 0.08);
+          osc.stop(now + idx * 0.08 + 0.25);
+        });
+      }
+      playWrong() {
+        if (!this.enabled) return;
+        this.init();
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(140, now);
+        osc.frequency.linearRampToValueAtTime(90, now + 0.3);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.35);
+      }
+      playStarOfHope() {
+        if (!this.enabled) return;
+        this.init();
+        const now = this.ctx.currentTime;
+        [440, 554, 659, 880, 1108].forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.06);
+          gain.gain.setValueAtTime(0.1, now + idx * 0.06);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.06 + 0.3);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now + idx * 0.06);
+          osc.stop(now + idx * 0.06 + 0.3);
+        });
+      }
+    }
+    const audioSynth = new SoundSynthesizer();
+    function toggleAudio() {
+      audioSynth.enabled = !audioSynth.enabled;
+      document.getElementById('audioIcon').className = audioSynth.enabled ? 'fa-solid fa-volume-high text-lg' : 'fa-solid fa-volume-xmark text-lg text-slate-500';
+    }
+
+    // STATE TOÀN CỤC
+    let appState = {
+      docId: null,
+      docTitle: '',
+      matchMode: 'ARENA_COMPETITION',
+      sessionId: null,
+      examId: null,
+      rounds: [],
+      currentRoundIndex: 0,
+      currentQuestionIndex: 0,
+      totalScore: 0,
+      currentStreak: 0,
+      starOfHopeActivated: false,
+      timerInterval: null,
+      secondsLeft: 15,
+      totalTimeLimit: 15,
+      startTime: 0,
+      cluesOpened: 0,
+      hintsUsedThisQuestion: 0,
+      cachedConceptMap: null,
+      // Multiplayer state
+      mpRoomCode: null,
+      mpPlayerId: null,
+      mpIsHost: false,
+      mpSocket: null,
+      mpNickname: '',
+      mpLeaderboard: [],
+      mpQuestionTimeLimit: 20,
+      mpQuestionStartTime: 0,
+      mpCurrentSafeQuestion: null,
+    };
+
+    // UPLOAD TÀI LIỆU -> CHUYỂN SANG PHÒNG CẤU HÌNH (LOBBY)
+    const fileInput = document.getElementById('fileInput');
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) handleUpload(e.target.files[0]);
+    });
+
+    async function handleUpload(file) {
+      const pBox = document.getElementById('uploadProgressBox');
+      pBox.classList.remove('hidden');
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch('/api/documents/upload', {
+          method: 'POST',
+          body: formData
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Lỗi bóc tách tài liệu');
+        }
+
+        const data = await res.json();
+        appState.docId = data.document_id;
+        appState.docTitle = data.title;
+
+        // Cập nhật giao diện phòng chờ Lobby
+        document.getElementById('lobbyDocTitle').innerText = data.title;
+        document.getElementById('lobbyChunkBadge').innerText = `${data.total_chunks} Chunks`;
+        
+        const b = data.bloom_taxonomy_counts || {};
+        document.getElementById('lobbyBloomBadge').innerText = `Bloom: ${b.REMEMBER || 0} Nhận biết, ${b.UNDERSTAND || 0} Thông hiểu, ${b.APPLY || 0} Vận dụng, ${b.ANALYZE_EVALUATE || 0} Phản biện`;
+
+        document.getElementById('uploadScreen').classList.add('hidden');
+        document.getElementById('lobbyScreen').classList.remove('hidden');
+        document.getElementById('viewConceptMapBtn').classList.remove('hidden');
+
+      } catch (err) {
+        alert('Lỗi: ' + err.message);
+        pBox.classList.add('hidden');
+      }
+    }
+
+    // CHỌN CHẾ ĐỘ THI ĐẤU HOẶC LUYỆN TẬP HOẶC MULTIPLAYER
+    function selectMode(mode) {
+      appState.matchMode = mode;
+      const arenaCard = document.getElementById('modeCardArena');
+      const practiceCard = document.getElementById('modeCardPractice');
+      const mpCard = document.getElementById('modeCardMultiplayer');
+      const arenaCheck = document.getElementById('arenaCheckIcon');
+      const practiceCheck = document.getElementById('practiceCheckIcon');
+      const mpCheck = document.getElementById('multiplayerCheckIcon');
+      const filterSection = document.getElementById('practiceFilterSection');
+      const mpHostSection = document.getElementById('multiplayerHostSection');
+      const launchBtnText = document.getElementById('launchBtnText');
+      const launchBtn = document.getElementById('launchBtn');
+
+      // Reset all cards
+      arenaCard.className = 'cursor-pointer p-4 rounded-xl border border-slate-700 bg-arena-900/60 hover:bg-arena-700/40 transition space-y-2 relative';
+      practiceCard.className = 'cursor-pointer p-4 rounded-xl border border-slate-700 bg-arena-900/60 hover:bg-arena-700/40 transition space-y-2 relative';
+      mpCard.className = 'cursor-pointer p-4 rounded-xl border border-slate-700 bg-arena-900/60 hover:bg-arena-700/40 transition space-y-2 relative';
+      arenaCheck.classList.add('hidden');
+      practiceCheck.classList.add('hidden');
+      mpCheck.classList.add('hidden');
+      filterSection.classList.add('hidden');
+      mpHostSection.classList.add('hidden');
+
+      if (mode === 'ARENA_COMPETITION') {
+        arenaCard.className = 'cursor-pointer p-4 rounded-xl border-2 border-amber-500 bg-amber-950/20 hover:bg-amber-950/30 transition space-y-2 relative';
+        arenaCheck.className = 'w-5 h-5 rounded-full bg-amber-500 text-black flex items-center justify-center text-xs font-bold';
+        arenaCheck.innerText = '✓';
+        launchBtn.className = 'bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-arena-900 font-black text-sm px-8 py-3 rounded-xl shadow-xl transition flex items-center space-x-2';
+        launchBtnText.innerText = 'BẮT ĐẦU TRANH TÀI OLYMPIC';
+      } else if (mode === 'PRACTICE_DOJO') {
+        practiceCard.className = 'cursor-pointer p-4 rounded-xl border-2 border-cyan-500 bg-cyan-950/20 hover:bg-cyan-950/30 transition space-y-2 relative';
+        practiceCheck.className = 'w-5 h-5 rounded-full bg-cyan-500 text-black flex items-center justify-center text-xs font-bold';
+        practiceCheck.innerText = '✓';
+        filterSection.classList.remove('hidden');
+        launchBtn.className = 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black text-sm px-8 py-3 rounded-xl shadow-xl transition flex items-center space-x-2';
+        launchBtnText.innerText = 'VÀO PHÒNG LUYỆN TẬP DOJO';
+      } else if (mode === 'MULTIPLAYER_ARENA') {
+        mpCard.className = 'cursor-pointer p-4 rounded-xl border-2 border-purple-500 bg-purple-950/20 hover:bg-purple-950/30 transition space-y-2 relative';
+        mpCheck.className = 'w-5 h-5 rounded-full bg-purple-500 text-white flex items-center justify-center text-xs font-bold';
+        mpCheck.innerText = '✓';
+        mpHostSection.classList.remove('hidden');
+        launchBtn.className = 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-black text-sm px-8 py-3 rounded-xl shadow-xl transition flex items-center space-x-2';
+        launchBtnText.innerText = 'TẠO PHÒNG MULTIPLAYER & MỜI BẠN BÈ';
+      }
+    }
+
+    // KÍCH HOẠT KHỞI TẠO TRẬN ĐẤU VỚI CẤU HÌNH ĐÃ CHỌN
+    async function launchMatch() {
+      const launchBtn = document.getElementById('launchBtn');
+      launchBtn.disabled = true;
+      launchBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Đang thiết lập phòng đấu...';
+
+      const configPayload = {
+        match_mode: appState.matchMode === 'MULTIPLAYER_ARENA' ? 'ARENA_COMPETITION' : appState.matchMode,
+        practice_filter: document.getElementById('practiceFilterSelect').value,
+        round_configs: [
+          { round_number: 1, difficulty: document.getElementById('diffR1').value, time_limit_sec: parseInt(document.getElementById('timeR1').value), question_count: 8 },
+          { round_number: 2, difficulty: document.getElementById('diffR2').value, time_limit_sec: parseInt(document.getElementById('timeR2').value), question_count: 4 },
+          { round_number: 3, difficulty: document.getElementById('diffR3').value, time_limit_sec: parseInt(document.getElementById('timeR3').value), question_count: 4 },
+          { round_number: 4, difficulty: document.getElementById('diffR4').value, time_limit_sec: parseInt(document.getElementById('timeR4').value), question_count: 3 },
+        ]
+      };
+
+      if (appState.matchMode === 'MULTIPLAYER_ARENA') {
+        // TẠO PHÒNG MULTIPLAYER
+        const hostNick = (document.getElementById('hostNicknameInput').value || 'Chủ Phòng').trim();
+        appState.mpNickname = hostNick;
+        try {
+          const res = await fetch('/api/multiplayer/create-room', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              host_nickname: hostNick,
+              document_id: appState.docId,
+              config: configPayload,
+            })
+          });
+
+          if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || 'Không thể tạo phòng đấu');
+          }
+
+          const data = await res.json();
+          appState.mpRoomCode = data.room_code;
+          appState.mpPlayerId = data.host_player_id;
+          appState.mpIsHost = true;
+
+          localStorage.setItem('olympic_room_code', data.room_code);
+          localStorage.setItem('olympic_player_id', data.host_player_id);
+          localStorage.setItem('olympic_nickname', hostNick);
+
+          document.getElementById('lobbyScreen').classList.add('hidden');
+          document.getElementById('multiplayerLobbyScreen').classList.remove('hidden');
+          document.getElementById('mpRoomCodeDisplay').innerText = data.room_code;
+          document.getElementById('mpHostControls').classList.remove('hidden');
+          document.getElementById('mpGuestControls').classList.add('hidden');
+
+          connectMultiplayerWebSocket();
+
+        } catch (err) {
+          alert('Lỗi tạo phòng: ' + err.message);
+          launchBtn.disabled = false;
+          launchBtn.innerHTML = '<i class="fa-solid fa-play mr-1"></i> BẮT ĐẦU TRANH TÀI';
+        }
+        return;
+      }
+
+      // CHẾ ĐỘ ĐƠN / PRACTICE DOJO NHƯ CŨ
+      try {
+        const res = await fetch(`/api/game/setup-match?document_id=${appState.docId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(configPayload)
+        });
+
+        if (!res.ok) throw new Error('Không thể khởi tạo phòng đấu');
+        const data = await res.json();
+
+        appState.sessionId = data.session_id;
+        appState.examId = data.exam_id;
+        appState.rounds = data.rounds;
+        appState.currentRoundIndex = 0;
+        appState.currentQuestionIndex = 0;
+        appState.totalScore = 0;
+        appState.currentStreak = 0;
+        appState.startTime = Date.now();
+
+        // Chuyển sang màn hình thi đấu
+        document.getElementById('lobbyScreen').classList.add('hidden');
+        document.getElementById('liveHUD').classList.remove('hidden');
+        document.getElementById('stageScreen').classList.remove('hidden');
+
+        // Cập nhật Mode Badge trên HUD
+        const modeBadge = document.getElementById('hudModeBadge');
+        const streakBox = document.getElementById('hudStreakBox');
+        if (appState.matchMode === 'ARENA_COMPETITION') {
+          modeBadge.className = 'flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-amber-500/50 bg-amber-950/30 text-amber-300 text-xs font-bold uppercase';
+          modeBadge.innerHTML = '<i class="fa-solid fa-trophy text-amber-400"></i><span>Thi Đấu Olympic</span>';
+          streakBox.classList.remove('hidden');
+          document.getElementById('practiceToolbar').classList.add('hidden');
+        } else {
+          modeBadge.className = 'flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-cyan-500/50 bg-cyan-950/30 text-cyan-300 text-xs font-bold uppercase';
+          modeBadge.innerHTML = '<i class="fa-solid fa-graduation-cap text-cyan-400"></i><span>Luyện Tập Dojo</span>';
+          streakBox.classList.add('hidden');
+          document.getElementById('practiceToolbar').classList.remove('hidden');
+        }
+
+        renderCurrentQuestion();
+
+      } catch (err) {
+        alert('Lỗi: ' + err.message);
+        launchBtn.disabled = false;
+        launchBtn.innerHTML = '<i class="fa-solid fa-play"></i> BẮT ĐẦU TRANH TÀI OLYMPIC';
+      }
+    }
+
+    // RENDER CÂU HỎI
+    function renderCurrentQuestion() {
+      clearInterval(appState.timerInterval);
+      appState.starOfHopeActivated = false;
+      appState.hintsUsedThisQuestion = 0;
+
+      // Ẩn hộp gợi ý
+      document.getElementById('hintDisplayBox').classList.add('hidden');
+      document.getElementById('feedbackBox').classList.add('hidden');
+
+      const round = appState.rounds[appState.currentRoundIndex];
+      const question = round.questions[appState.currentQuestionIndex];
+
+      document.getElementById('hudRoundName').innerText = `Vòng ${round.round_number}: ${round.round_name}`;
+      document.getElementById('roundBadge').innerText = `VÒNG ${round.round_number}`;
+      document.getElementById('roundBadge').className = appState.matchMode === 'ARENA_COMPETITION' 
+        ? 'px-2.5 py-1 text-xs font-bold rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase'
+        : 'px-2.5 py-1 text-xs font-bold rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 uppercase';
+      
+      document.getElementById('roundTitle').innerText = `${round.round_name}`;
+      document.getElementById('roundTheme').innerText = round.round_theme;
+      document.getElementById('currentQuestionNum').innerText = appState.currentQuestionIndex + 1;
+      document.getElementById('totalRoundQuestions').innerText = round.questions.length;
+      document.getElementById('dimensionBadge').innerText = question.knowledge_dimension || 'Khái niệm';
+      document.getElementById('bloomBadge').innerText = `Bloom: ${question.bloom_level || 'UNDERSTAND'}`;
+      document.getElementById('baseScoreTag').innerText = `+${question.base_score} điểm`;
+
+      // Vòng 4: Star of Hope (Chỉ khi thi đấu)
+      const starContainer = document.getElementById('starOfHopeContainer');
+      if (round.round_number === 4 && question.allows_star_of_hope && appState.matchMode === 'ARENA_COMPETITION') {
+        starContainer.classList.remove('hidden');
+        const starBtn = document.getElementById('starOfHopeBtn');
+        starBtn.className = 'px-4 py-2 rounded-lg bg-arena-700 hover:bg-amber-600/30 text-amber-400 font-bold text-xs border border-amber-500/50 transition flex items-center space-x-2';
+        starBtn.innerHTML = '<i class="fa-regular fa-star"></i><span>ĐẶT NGÔI SAO HY VỌNG</span>';
+      } else {
+        starContainer.classList.add('hidden');
+      }
+
+      // Vòng 2: Obstacle Board
+      const obsBoard = document.getElementById('obstacleBoard');
+      if (round.round_number === 2) {
+        obsBoard.classList.remove('hidden');
+        renderObstacleLetters(round.obstacle_length || 10);
+      } else {
+        obsBoard.classList.add('hidden');
+      }
+
+      document.getElementById('questionPrompt').innerText = question.prompt;
+
+      const optContainer = document.getElementById('optionsContainer');
+      optContainer.innerHTML = '';
+
+      if (question.options && question.options.length > 0) {
+        const letters = ['A', 'B', 'C', 'D'];
+        question.options.forEach((opt, idx) => {
+          const btn = document.createElement('button');
+          btn.className = 'w-full text-left p-4 rounded-xl bg-arena-700/60 hover:bg-arena-700 border border-slate-700 hover:border-cyan-500 transition duration-150 flex items-start space-x-3 group';
+          btn.onclick = () => submitUserAnswer(opt);
+          btn.innerHTML = `
+            <span class="w-6 h-6 rounded-lg bg-arena-900 text-cyan-400 font-bold flex items-center justify-center text-xs group-hover:bg-cyan-500 group-hover:text-black transition">
+              ${letters[idx] || idx+1}
+            </span>
+            <span class="text-xs md:text-sm text-slate-200 leading-snug">${opt}</span>
+          `;
+          optContainer.appendChild(btn);
+        });
+      }
+
+      startTimer(question.time_limit_sec || 20);
+    }
+
+    // ĐỒNG HỒ ĐẾM NGƯỢC
+    function startTimer(seconds) {
+      appState.secondsLeft = seconds;
+      appState.totalTimeLimit = seconds;
+      const timerText = document.getElementById('timerText');
+      const timerBox = document.getElementById('timerBox');
+
+      if (appState.matchMode === 'PRACTICE_DOJO') {
+        // Chế độ Luyện tập: Đồng hồ bấm giờ đếm tiến (tham khảo)
+        let elapsed = 0;
+        timerText.innerText = '0s';
+        timerBox.className = 'w-12 h-12 rounded-xl bg-arena-900 border-2 border-cyan-500/50 flex flex-col items-center justify-center shadow-lg';
+        appState.timerInterval = setInterval(() => {
+          elapsed++;
+          timerText.innerText = elapsed + 's';
+        }, 1000);
+      } else {
+        // Chế độ Thi đấu: Đếm ngược nghiêm ngặt
+        timerText.innerText = appState.secondsLeft;
+        timerBox.className = 'w-12 h-12 rounded-xl bg-arena-900 border-2 border-cyan-500 flex flex-col items-center justify-center shadow-lg transition-all';
+
+        appState.timerInterval = setInterval(() => {
+          appState.secondsLeft--;
+          timerText.innerText = appState.secondsLeft;
+          audioSynth.playTick();
+
+          if (appState.secondsLeft <= 5) {
+            timerBox.className = 'w-12 h-12 rounded-xl bg-red-950/80 border-2 border-red-500 flex flex-col items-center justify-center shadow-lg animate-pulse';
+            timerText.className = 'text-lg font-black text-red-400 font-mono';
+          }
+
+          if (appState.secondsLeft <= 0) {
+            clearInterval(appState.timerInterval);
+            submitUserAnswer('(Hết thời gian)');
+          }
+        }, 1000);
+      }
+    }
+
+    // GỢI Ý 2 TẦNG (PRACTICE DOJO)
+    async function fetchHint(level) {
+      const round = appState.rounds[appState.currentRoundIndex];
+      const question = round.questions[appState.currentQuestionIndex];
+
+      try {
+        const res = await fetch('/api/game/get-hint', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: appState.sessionId,
+            question_id: question.question_id,
+            hint_level: level
+          })
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          alert(err.detail || 'Không thể lấy gợi ý');
+          return;
+        }
+
+        const data = await res.json();
+        appState.hintsUsedThisQuestion++;
+
+        const hBox = document.getElementById('hintDisplayBox');
+        const hTitle = document.getElementById('hintTitle');
+        const hContent = document.getElementById('hintContent');
+
+        hBox.classList.remove('hidden');
+        hTitle.innerText = level === 1 ? '💡 Gợi ý Cấp 1 (Định hướng tư duy):' : '🔍 Gợi ý Cấp 2 (Manh mối mấu chốt):';
+        hContent.innerText = data.hint_text;
+
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // NỘP BÀI
+    async function submitUserAnswer(answer) {
+      clearInterval(appState.timerInterval);
+      const timeTaken = appState.totalTimeLimit - Math.max(0, appState.secondsLeft);
+
+      const btns = document.querySelectorAll('#optionsContainer button');
+      btns.forEach(b => b.disabled = true);
+
+      // Nếu đang ở Chế độ Multiplayer -> Gửi qua WebSocket
+      if (appState.matchMode === 'MULTIPLAYER_ARENA') {
+        if (appState.mpSocket && appState.mpSocket.readyState === WebSocket.OPEN) {
+          appState.mpSocket.send(JSON.stringify({
+            action: 'SUBMIT_ANSWER',
+            answer: answer,
+            time_taken: timeTaken,
+          }));
+        }
+        return;
+      }
+
+      const round = appState.rounds[appState.currentRoundIndex];
+      const question = round.questions[appState.currentQuestionIndex];
+
+      const payload = {
+        session_id: appState.sessionId,
+        round_number: round.round_number,
+        question_id: question.question_id,
+        user_answer: answer,
+        time_taken_sec: appState.matchMode === 'PRACTICE_DOJO' ? 5.0 : timeTaken,
+        star_of_hope_activated: appState.starOfHopeActivated,
+        used_hints_count: appState.hintsUsedThisQuestion,
+        is_practice: (appState.matchMode === 'PRACTICE_DOJO')
+      };
+
+      try {
+        const res = await fetch('/api/game/submit-answer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const feedback = await res.json();
+        showFeedback(feedback, answer);
+
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function showFeedback(fb, userAns) {
+      appState.totalScore = fb.current_total_score;
+      appState.currentStreak = fb.current_streak;
+
+      document.getElementById('hudScore').innerText = fb.current_total_score;
+      document.getElementById('hudStreak').innerText = fb.current_streak;
+
+      const fBox = document.getElementById('feedbackBox');
+      const fTitle = document.getElementById('feedbackTitle');
+      const fDelta = document.getElementById('feedbackScoreDelta');
+
+      fBox.classList.remove('hidden');
+
+      if (fb.is_correct) {
+        audioSynth.playCorrect();
+        fBox.className = 'mt-6 p-5 rounded-xl border border-emerald-500/50 bg-emerald-950/20 space-y-3';
+        fTitle.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-400 text-lg"></i><span class="text-emerald-300">Chính xác!</span>';
+        fDelta.innerHTML = `<span class="text-emerald-400">+${fb.total_delta_score} điểm</span>${fb.speed_bonus ? ` (Tốc độ: +${fb.speed_bonus}đ)` : ''}`;
+      } else {
+        audioSynth.playWrong();
+        fBox.className = 'mt-6 p-5 rounded-xl border border-red-500/50 bg-red-950/20 space-y-3';
+        const msg = fb.time_expired ? 'Hết thời gian quy định!' : 'Chưa chính xác!';
+        fTitle.innerHTML = `<i class="fa-solid fa-circle-xmark text-red-400 text-lg"></i><span class="text-red-300">${msg}</span>`;
+        fDelta.innerHTML = `<span class="text-red-400">${fb.total_delta_score} điểm</span> (Đáp án đúng: <b class="text-white">${fb.correct_answer}</b>)`;
+      }
+
+      document.getElementById('feedbackExplanation').innerText = fb.explanation;
+
+      // Render từng bước suy luận
+      const stepsList = document.getElementById('stepsList');
+      stepsList.innerHTML = (fb.step_by_step_explanation || []).map(s => `<li><i class="fa-solid fa-chevron-right text-cyan-500 mr-1.5 text-[9px]"></i>${s}</li>`).join('');
+
+      document.getElementById('citationChunkId').innerText = `[${fb.source_citation.chunk_id}]`;
+      document.getElementById('citationSection').innerText = fb.source_citation.page_or_section;
+      document.getElementById('citationQuote').innerText = `"${fb.source_citation.exact_quote}"`;
+
+      // Nút làm lại trong chế độ Practice
+      const practiceBtns = document.getElementById('practiceRetryButtons');
+      if (appState.matchMode === 'PRACTICE_DOJO') {
+        practiceBtns.classList.remove('hidden');
+      } else {
+        practiceBtns.classList.add('hidden');
+      }
+    }
+
+    // LÀM LẠI CÂU HỎI
+    function retryCurrentQuestion() {
+      renderCurrentQuestion();
+    }
+
+    // TẠO BIẾN THỂ CÂU HỎI TƯƠNG TỰ
+    async function requestQuestionVariant() {
+      const round = appState.rounds[appState.currentRoundIndex];
+      const question = round.questions[appState.currentQuestionIndex];
+
+      const res = await fetch(`/api/game/generate-variant?session_id=${appState.sessionId}&question_id=${question.question_id}`, {
+        method: 'POST'
+      });
+      const variant = await res.json();
+      
+      // Thay thế câu hỏi hiện tại bằng biến thể mới
+      round.questions.splice(appState.currentQuestionIndex + 1, 0, variant);
+      appState.currentQuestionIndex++;
+      alert('Đã kiến tạo một biến thể câu hỏi tương tự để rèn luyện!');
+      renderCurrentQuestion();
+    }
+
+    function nextQuestion() {
+      // Nếu là Multiplayer: Chỉ Host mới gửi lệnh NEXT_QUESTION
+      if (appState.matchMode === 'MULTIPLAYER_ARENA') {
+        if (appState.mpIsHost && appState.mpSocket && appState.mpSocket.readyState === WebSocket.OPEN) {
+          appState.mpSocket.send(JSON.stringify({ action: 'NEXT_QUESTION' }));
+        }
+        return;
+      }
+
+      const round = appState.rounds[appState.currentRoundIndex];
+      appState.currentQuestionIndex++;
+
+      if (appState.currentQuestionIndex < round.questions.length) {
+        renderCurrentQuestion();
+      } else {
+        appState.currentRoundIndex++;
+        appState.currentQuestionIndex = 0;
+
+        if (appState.currentRoundIndex < appState.rounds.length) {
+          alert(`Hoàn thành Vòng ${round.round_number}! Tiến vào Vòng ${appState.rounds[appState.currentRoundIndex].round_number}.`);
+          renderCurrentQuestion();
+        } else {
+          finishMatch();
+        }
+      }
+    }
+
+    function renderObstacleLetters(len) {
+      const container = document.getElementById('obstacleLetters');
+      container.innerHTML = '';
+      for (let i = 0; i < len; i++) {
+        const box = document.createElement('div');
+        box.className = 'w-9 h-10 rounded-lg bg-arena-900 border border-cyan-500/50 flex items-center justify-center font-bold text-cyan-400 text-sm shadow';
+        box.innerText = '?';
+        container.appendChild(box);
+      }
+    }
+
+    async function promptSolveObstacle() {
+      const guess = prompt('NHẬP TỪ KHÓA CHƯỚNG NGẠI VẬT:');
+      if (!guess) return;
+
+      const res = await fetch(`/api/game/solve-obstacle?session_id=${appState.sessionId}&guessed_keyword=${encodeURIComponent(guess)}&clues_opened=${appState.cluesOpened}`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (data.is_correct) {
+        audioSynth.playCorrect();
+        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+        alert(`CHÍNH XÁC! Chướng ngại vật là: ${data.actual_keyword} (+${data.points_awarded} ĐIỂM)`);
+        appState.totalScore = data.current_total_score;
+        document.getElementById('hudScore').innerText = data.current_total_score;
+      } else {
+        audioSynth.playWrong();
+        alert('Từ khóa chướng ngại vật chưa chính xác!');
+      }
+    }
+
+    function toggleStarOfHope() {
+      // Nếu là Multiplayer: Gửi qua WebSocket tới Server để broadcast cả phòng
+      if (appState.matchMode === 'MULTIPLAYER_ARENA') {
+        if (appState.mpSocket && appState.mpSocket.readyState === WebSocket.OPEN) {
+          appState.mpSocket.send(JSON.stringify({ action: 'TOGGLE_STAR_OF_HOPE' }));
+        }
+        return;
+      }
+
+      appState.starOfHopeActivated = !appState.starOfHopeActivated;
+      const btn = document.getElementById('starOfHopeBtn');
+      if (appState.starOfHopeActivated) {
+        audioSynth.playStarOfHope();
+        btn.className = 'px-4 py-2 rounded-lg star-active text-amber-300 font-bold text-xs border transition flex items-center space-x-2';
+        btn.innerHTML = '<i class="fa-solid fa-star text-amber-300 animate-spin"></i><span>ĐÃ ĐẶT NGÔI SAO HY VỌNG (x2)</span>';
+      } else {
+        btn.className = 'px-4 py-2 rounded-lg bg-arena-700 hover:bg-amber-600/30 text-amber-400 font-bold text-xs border border-amber-500/50 transition flex items-center space-x-2';
+        btn.innerHTML = '<i class="fa-regular fa-star"></i><span>ĐẶT NGÔI SAO HY VỌNG</span>';
+      }
+    }
+
+    async function finishMatch() {
+      const timeSpent = Math.round((Date.now() - appState.startTime) / 1000);
+      const res = await fetch(`/api/game/finish?session_id=${appState.sessionId}&time_spent_sec=${timeSpent}`, {
+        method: 'POST'
+      });
+      const summary = await res.json();
+
+      document.getElementById('stageScreen').classList.add('hidden');
+      document.getElementById('liveHUD').classList.add('hidden');
+      document.getElementById('summaryScreen').classList.remove('hidden');
+
+      confetti({ particleCount: 150, spread: 80, origin: { y: 0.5 } });
+
+      document.getElementById('summaryHeading').innerText = appState.matchMode === 'ARENA_COMPETITION' 
+        ? 'HOÀN THÀNH ĐẤU TRƯỜNG OLYMPIC' 
+        : 'HOÀN THÀNH PHIÊN LUYỆN TẬP DOJO';
+      
+      document.getElementById('summaryDocTitle').innerText = summary.document_title;
+      document.getElementById('sumTotalScore').innerText = summary.total_score;
+      document.getElementById('sumMaxStreak').innerText = summary.max_streak;
+      document.getElementById('sumTimeSpent').innerText = `${summary.time_spent_sec}s`;
+      document.getElementById('sumHintsUsed').innerText = summary.hints_used_total;
+
+      document.getElementById('strengthsList').innerHTML = summary.strengths.map(s => `<li><i class="fa-solid fa-check text-emerald-400 mr-1.5"></i>${s}</li>`).join('');
+      document.getElementById('gapsList').innerHTML = summary.knowledge_gaps.map(g => `<li><i class="fa-solid fa-xmark text-crimson mr-1.5"></i>${g}</li>`).join('');
+      document.getElementById('recommendationsList').innerHTML = summary.actionable_recommendations.map(r => `<li><i class="fa-solid fa-arrow-right text-amber-400 mr-1.5"></i>${r}</li>`).join('');
+
+      renderRadar(summary.dimension_analytics);
+    }
+
+    function renderRadar(analytics) {
+      const ctx = document.getElementById('radarChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'radar',
+        data: {
+          labels: analytics.map(a => a.dimension_name),
+          datasets: [{
+            data: analytics.map(a => a.accuracy_percentage),
+            backgroundColor: appState.matchMode === 'ARENA_COMPETITION' ? 'rgba(245, 158, 11, 0.25)' : 'rgba(6, 182, 212, 0.25)',
+            borderColor: appState.matchMode === 'ARENA_COMPETITION' ? 'rgba(245, 158, 11, 1)' : 'rgba(6, 182, 212, 1)',
+            pointBackgroundColor: '#ffd700',
+            pointBorderColor: '#fff',
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            r: {
+              angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
+              grid: { color: 'rgba(255, 255, 255, 0.1)' },
+              pointLabels: { color: '#94a3b8', font: { size: 10 } },
+              ticks: { display: false, min: 0, max: 100 }
+            }
+          },
+          plugins: { legend: { display: false } }
+        }
+      });
+    }
+
+    function returnToLobby() {
+      document.getElementById('summaryScreen').classList.add('hidden');
+      document.getElementById('lobbyScreen').classList.remove('hidden');
+      const launchBtn = document.getElementById('launchBtn');
+      launchBtn.disabled = false;
+      selectMode(appState.matchMode);
+    }
+
+    async function openConceptModal() {
+      const modal = document.getElementById('conceptModal');
+      const body = document.getElementById('conceptModalBody');
+      modal.classList.remove('hidden');
+
+      if (!appState.cachedConceptMap && appState.docId) {
+        const res = await fetch(`/api/documents/${appState.docId}/concept-map`);
+        appState.cachedConceptMap = await res.json();
+      }
+
+      const cm = appState.cachedConceptMap;
+      if (!cm) return;
+
+      body.innerHTML = `
+        <div>
+          <h4 class="font-bold text-amber-400 text-sm mb-2"><i class="fa-solid fa-book-bookmark mr-1"></i> Định nghĩa (${cm.core_definitions.length})</h4>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+            ${cm.core_definitions.map(d => `
+              <div class="bg-arena-900 p-2.5 rounded-lg border border-slate-700">
+                <span class="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 text-amber-400 border border-slate-600 font-mono">${d.bloom_level || 'REMEMBER'}</span>
+                <p class="font-bold text-cyan-300 mt-1">${d.term}</p>
+                <p class="text-slate-300 mt-0.5">${d.definition}</p>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+    function closeConceptModal() {
+      document.getElementById('conceptModal').classList.add('hidden');
+    }
+
+    // ==========================================
+    // MULTIPLAYER ARENA: WEBSOCKET & SYNC LOGIC
+    // ==========================================
+
+    function openJoinModal() {
+      const modal = document.getElementById('joinRoomModal');
+      modal.classList.remove('hidden');
+      const hash = window.location.hash;
+      if (hash && hash.includes('join=')) {
+        const code = hash.split('join=')[1];
+        if (code) document.getElementById('joinRoomCodeInput').value = code.trim().toUpperCase();
+      }
+    }
+
+    function closeJoinModal() {
+      document.getElementById('joinRoomModal').classList.add('hidden');
+    }
+
+    async function submitJoinRoom() {
+      const roomCode = document.getElementById('joinRoomCodeInput').value.trim().toUpperCase();
+      const nickname = document.getElementById('joinNicknameInput').value.trim() || 'Người chơi Olympic';
+
+      if (!roomCode) {
+        alert('Vui lòng nhập mã phòng 6 ký tự (ví dụ: OLY-839)!');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/multiplayer/join-room', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            room_code: roomCode,
+            nickname: nickname,
+          })
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Không thể tham gia phòng này');
+        }
+
+        const data = await res.json();
+        appState.matchMode = 'MULTIPLAYER_ARENA';
+        appState.mpRoomCode = data.room_code;
+        appState.mpPlayerId = data.player_id;
+        appState.mpNickname = nickname;
+        appState.mpIsHost = data.is_host;
+
+        localStorage.setItem('olympic_room_code', data.room_code);
+        localStorage.setItem('olympic_player_id', data.player_id);
+        localStorage.setItem('olympic_nickname', nickname);
+
+        closeJoinModal();
+        document.getElementById('uploadScreen').classList.add('hidden');
+        document.getElementById('lobbyScreen').classList.add('hidden');
+        document.getElementById('multiplayerLobbyScreen').classList.remove('hidden');
+
+        document.getElementById('mpRoomCodeDisplay').innerText = data.room_code;
+        if (data.is_host) {
+          document.getElementById('mpHostControls').classList.remove('hidden');
+          document.getElementById('mpGuestControls').classList.add('hidden');
+        } else {
+          document.getElementById('mpHostControls').classList.add('hidden');
+          document.getElementById('mpGuestControls').classList.remove('hidden');
+        }
+
+        connectMultiplayerWebSocket();
+
+      } catch (err) {
+        alert('Lỗi vào phòng: ' + err.message);
+      }
+    }
+
+    function copyRoomCode() {
+      if (!appState.mpRoomCode) return;
+      navigator.clipboard.writeText(appState.mpRoomCode).then(() => {
+        alert('Đã sao chép mã phòng: ' + appState.mpRoomCode);
+      });
+    }
+
+    function copyInviteLink() {
+      if (!appState.mpRoomCode) return;
+      const url = `${window.location.origin}/#join=${appState.mpRoomCode}`;
+      navigator.clipboard.writeText(url).then(() => {
+        alert('Đã sao chép link mời: ' + url);
+      });
+    }
+
+    function mpStartGameHost() {
+      if (!appState.mpSocket || appState.mpSocket.readyState !== WebSocket.OPEN) {
+        alert('Chưa kết nối máy chủ!');
+        return;
+      }
+      appState.mpSocket.send(JSON.stringify({ action: 'START_GAME' }));
+    }
+
+    function connectMultiplayerWebSocket() {
+      if (!appState.mpRoomCode || !appState.mpPlayerId) return;
+
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/api/multiplayer/ws/${appState.mpRoomCode}/${appState.mpPlayerId}`;
+
+      if (appState.mpSocket) {
+        try { appState.mpSocket.close(); } catch (e) {}
+      }
+
+      const socket = new WebSocket(wsUrl);
+      appState.mpSocket = socket;
+
+      socket.onopen = () => {
+        console.log('[Multiplayer] WebSocket đã kết nối thành công tới phòng', appState.mpRoomCode);
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          handleMultiplayerMessage(msg);
+        } catch (e) {
+          console.error('[Multiplayer] Lỗi parse WS message:', e);
+        }
+      };
+
+      socket.onclose = () => {
+        console.log('[Multiplayer] WebSocket bị đóng.');
+      };
+
+      socket.onerror = (e) => {
+        console.error('[Multiplayer] WebSocket lỗi:', e);
+      };
+    }
+
+    function handleMultiplayerMessage(msg) {
+      const type = msg.type;
+      const data = msg.data || {};
+
+      switch (type) {
+        case 'PLAYER_JOINED':
+        case 'PLAYER_DISCONNECTED':
+          if (data.players) renderMultiplayerLobby(data.players);
+          if (data.leaderboard) renderMultiplayerLeaderboard(data.leaderboard);
+          break;
+
+        case 'QUESTION_START':
+        case 'QUESTION_RESUME':
+          renderMultiplayerQuestion(data);
+          break;
+
+        case 'PLAYER_SUBMITTED':
+          document.getElementById('mpSubmissionStatus').innerText = `${data.answered_count}/${data.total_players} đã nộp bài`;
+          break;
+
+        case 'QUESTION_RESULT':
+          renderMultiplayerQuestionResult(data);
+          break;
+
+        case 'STAR_OF_HOPE_TOGGLED':
+          showMpStarToast(data.nickname, data.is_activated);
+          break;
+
+        case 'MATCH_FINISHED':
+          renderMultiplayerMatchFinished(data);
+          break;
+      }
+    }
+
+    function renderMultiplayerLobby(players) {
+      const container = document.getElementById('mpPlayerList');
+      const countEl = document.getElementById('mpPlayerCount');
+      if (!container || !players) return;
+
+      countEl.innerText = players.length;
+      container.innerHTML = players.map(p => `
+        <div class="bg-arena-900 p-3.5 rounded-xl border ${p.player_id === appState.mpPlayerId ? 'border-purple-500 bg-purple-950/20' : 'border-slate-700'} flex items-center justify-between shadow">
+          <div class="flex items-center space-x-3">
+            <div class="w-8 h-8 rounded-lg ${p.is_host ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'bg-slate-800 text-slate-300'} flex items-center justify-center font-bold text-sm">
+              <i class="fa-solid ${p.is_host ? 'fa-crown text-amber-400' : 'fa-user'}"></i>
+            </div>
+            <div>
+              <p class="font-bold text-xs text-white flex items-center gap-1.5">
+                ${p.nickname}
+                ${p.player_id === appState.mpPlayerId ? '<span class="text-[10px] px-1.5 py-0.2 bg-purple-900 text-purple-300 rounded font-normal">Bạn</span>' : ''}
+              </p>
+              <p class="text-[10px] text-slate-400">${p.is_host ? 'Chủ phòng (Host)' : 'Đấu thủ'}</p>
+            </div>
+          </div>
+          <span class="w-2.5 h-2.5 rounded-full ${p.is_connected ? 'bg-emerald-400' : 'bg-slate-600'}" title="${p.is_connected ? 'Đang kết nối' : 'Mất kết nối'}"></span>
+        </div>
+      `).join('');
+    }
+
+    function renderMultiplayerLeaderboard(leaderboard) {
+      appState.mpLeaderboard = leaderboard;
+      const rowContainer = document.getElementById('mpMiniLeaderboardRows');
+      if (!rowContainer || !leaderboard) return;
+
+      rowContainer.innerHTML = leaderboard.map(p => `
+        <div class="p-2 rounded-lg bg-arena-900/90 border ${p.player_id === appState.mpPlayerId ? 'border-purple-500/60 bg-purple-950/20' : 'border-slate-800'} flex items-center justify-between text-xs">
+          <div class="flex items-center space-x-2">
+            <span class="font-mono font-bold text-[11px] ${p.rank === 1 ? 'text-amber-400' : p.rank === 2 ? 'text-slate-300' : 'text-orange-400'}">#${p.rank}</span>
+            <span class="font-medium text-slate-200 truncate max-w-[90px]">${p.nickname}</span>
+            ${p.star_of_hope ? '<span class="text-amber-400">⭐</span>' : ''}
+          </div>
+          <div class="text-right">
+            <span class="font-bold text-amber-400">${p.total_score}đ</span>
+            ${p.current_streak > 1 ? `<span class="text-[10px] text-orange-400 ml-1">(${p.current_streak}🔥)</span>` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderMultiplayerQuestion(data) {
+      clearInterval(appState.timerInterval);
+      appState.starOfHopeActivated = false;
+
+      // Ẩn sảnh chờ, hiện màn hình thi đấu
+      document.getElementById('multiplayerLobbyScreen').classList.add('hidden');
+      document.getElementById('stageScreen').classList.remove('hidden');
+      document.getElementById('liveHUD').classList.remove('hidden');
+      document.getElementById('mpMiniLeaderboard').classList.remove('hidden');
+      document.getElementById('feedbackBox').classList.add('hidden');
+      document.getElementById('practiceToolbar').classList.add('hidden');
+
+      const q = data.question;
+      appState.mpCurrentSafeQuestion = q;
+
+      document.getElementById('hudRoundName').innerText = `Vòng ${data.round_number}: ${data.round_name}`;
+      document.getElementById('roundBadge').innerText = `VÒNG ${data.round_number}`;
+      document.getElementById('roundBadge').className = 'px-2.5 py-1 text-xs font-bold rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 uppercase';
+      document.getElementById('roundTitle').innerText = data.round_name;
+      document.getElementById('roundTheme').innerText = data.round_theme || '';
+      document.getElementById('currentQuestionNum').innerText = data.question_index;
+      document.getElementById('totalRoundQuestions').innerText = data.total_questions_in_round;
+      document.getElementById('dimensionBadge').innerText = q.knowledge_dimension || 'Olympic Multiplayer';
+      document.getElementById('bloomBadge').innerText = `Bloom: ${q.bloom_level || 'UNDERSTAND'}`;
+      document.getElementById('baseScoreTag').innerText = `+${q.base_score || 10} điểm`;
+
+      // Vòng 4: Cược Ngôi Sao Hy Vọng
+      const starContainer = document.getElementById('starOfHopeContainer');
+      if (data.round_number === 4 && q.allows_star_of_hope) {
+        starContainer.classList.remove('hidden');
+        const starBtn = document.getElementById('starOfHopeBtn');
+        starBtn.className = 'px-4 py-2 rounded-lg bg-arena-700 hover:bg-amber-600/30 text-amber-400 font-bold text-xs border border-amber-500/50 transition flex items-center space-x-2';
+        starBtn.innerHTML = '<i class="fa-regular fa-star"></i><span>ĐẶT NGÔI SAO HY VỌNG</span>';
+      } else {
+        starContainer.classList.add('hidden');
+      }
+
+      document.getElementById('questionPrompt').innerText = q.prompt;
+
+      const optContainer = document.getElementById('optionsContainer');
+      optContainer.innerHTML = '';
+      if (q.options && q.options.length > 0) {
+        const letters = ['A', 'B', 'C', 'D'];
+        q.options.forEach((opt, idx) => {
+          const btn = document.createElement('button');
+          btn.className = 'w-full text-left p-4 rounded-xl bg-arena-700/60 hover:bg-arena-700 border border-slate-700 hover:border-purple-400 transition duration-150 flex items-start space-x-3 group';
+          btn.onclick = () => submitUserAnswer(opt);
+          btn.innerHTML = `
+            <span class="w-6 h-6 rounded-lg bg-arena-900 text-purple-400 font-bold flex items-center justify-center text-xs group-hover:bg-purple-500 group-hover:text-black transition">
+              ${letters[idx] || idx+1}
+            </span>
+            <span class="text-xs md:text-sm text-slate-200 leading-snug">${opt}</span>
+          `;
+          optContainer.appendChild(btn);
+        });
+      }
+
+      if (data.leaderboard) renderMultiplayerLeaderboard(data.leaderboard);
+      document.getElementById('mpSubmissionStatus').innerText = '0/0 đã nộp bài';
+
+      // Bắt đầu đếm ngược đồng bộ
+      const timeLimit = data.time_limit_sec || 20;
+      const elapsed = data.elapsed_sec || 0;
+      const remain = Math.max(1, timeLimit - elapsed);
+      startTimer(remain);
+    }
+
+    function renderMultiplayerQuestionResult(data) {
+      clearInterval(appState.timerInterval);
+
+      if (data.leaderboard) {
+        renderMultiplayerLeaderboard(data.leaderboard);
+        // Cập nhật điểm HUD cho người chơi hiện tại
+        const me = data.leaderboard.find(p => p.player_id === appState.mpPlayerId);
+        if (me) {
+          document.getElementById('hudScore').innerText = me.total_score;
+          document.getElementById('hudStreak').innerText = me.current_streak;
+        }
+      }
+
+      const myAns = data.answers_summary ? data.answers_summary[appState.mpPlayerId] : null;
+
+      const fBox = document.getElementById('feedbackBox');
+      const fTitle = document.getElementById('feedbackTitle');
+      const fDelta = document.getElementById('feedbackScoreDelta');
+
+      fBox.classList.remove('hidden');
+
+      if (myAns && myAns.is_correct) {
+        audioSynth.playCorrect();
+        fBox.className = 'mt-6 p-5 rounded-xl border border-emerald-500/50 bg-emerald-950/20 space-y-3';
+        fTitle.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-400 text-lg"></i><span class="text-emerald-300">Chính xác!</span>';
+        fDelta.innerHTML = `<span class="text-emerald-400">+${myAns.delta_score} điểm</span>${myAns.speed_bonus ? ` (Tốc độ: +${myAns.speed_bonus}đ)` : ''}`;
+      } else {
+        audioSynth.playWrong();
+        fBox.className = 'mt-6 p-5 rounded-xl border border-red-500/50 bg-red-950/20 space-y-3';
+        const msg = (myAns && myAns.time_expired) ? 'Hết thời gian quy định!' : 'Chưa chính xác!';
+        fTitle.innerHTML = `<i class="fa-solid fa-circle-xmark text-red-400 text-lg"></i><span class="text-red-300">${msg}</span>`;
+        fDelta.innerHTML = `<span class="text-red-400">${myAns ? myAns.delta_score : 0} điểm</span> (Đáp án đúng: <b class="text-white">${data.correct_answer}</b>)`;
+      }
+
+      document.getElementById('feedbackExplanation').innerText = data.explanation;
+
+      if (data.source_citation) {
+        document.getElementById('citationChunkId').innerText = `[${data.source_citation.chunk_id}]`;
+        document.getElementById('citationSection').innerText = data.source_citation.page_or_section;
+        document.getElementById('citationQuote').innerText = `"${data.source_citation.exact_quote}"`;
+      }
+
+      document.getElementById('practiceRetryButtons').classList.add('hidden');
+
+      const nextBtn = document.getElementById('nextQuestionBtn');
+      if (appState.mpIsHost) {
+        nextBtn.innerHTML = 'CÂU TIẾP THEO (CHỦ PHÒNG) <i class="fa-solid fa-arrow-right ml-1"></i>';
+        nextBtn.disabled = false;
+        nextBtn.className = 'ml-auto bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-lg transition';
+      } else {
+        nextBtn.innerHTML = '<i class="fa-solid fa-hourglass-half fa-spin mr-1.5"></i> Chờ Chủ phòng chuyển câu...';
+        nextBtn.disabled = true;
+        nextBtn.className = 'ml-auto bg-slate-800 text-slate-400 font-bold text-xs px-5 py-2.5 rounded-lg cursor-not-allowed';
+      }
+    }
+
+    function showMpStarToast(nickname, isActivated) {
+      if (!isActivated) return;
+      audioSynth.playStarOfHope();
+      const banner = document.getElementById('mpLiveBanner');
+      const text = document.getElementById('mpLiveBannerText');
+      text.innerHTML = `<i class="fa-solid fa-star text-amber-400 animate-spin mr-1"></i> <b>${nickname}</b> ĐÃ ĐẶT CƯỢC NGÔI SAO HY VỌNG!`;
+      banner.classList.remove('hidden');
+      setTimeout(() => {
+        banner.classList.add('hidden');
+      }, 5000);
+    }
+
+    function renderMultiplayerMatchFinished(data) {
+      document.getElementById('stageScreen').classList.add('hidden');
+      document.getElementById('liveHUD').classList.add('hidden');
+      document.getElementById('summaryScreen').classList.remove('hidden');
+
+      confetti({ particleCount: 200, spread: 90, origin: { y: 0.5 } });
+
+      document.getElementById('summaryHeading').innerText = '🏆 KẾT THÚC TRẬN ĐẤU MULTIPLAYER';
+      document.getElementById('summaryDocTitle').innerText = data.document_title || '';
+
+      const me = (data.leaderboard || []).find(p => p.player_id === appState.mpPlayerId);
+      if (me) {
+        document.getElementById('sumTotalScore').innerText = me.total_score;
+        document.getElementById('sumMaxStreak').innerText = me.max_streak;
+      }
+
+      // Render bảng tổng sắp chung cuộc
+      const strengthsList = document.getElementById('strengthsList');
+      strengthsList.innerHTML = (data.leaderboard || []).map(p => `
+        <li class="flex items-center justify-between p-2 rounded bg-arena-900 border border-slate-700">
+          <span class="font-bold ${p.rank === 1 ? 'text-amber-400' : 'text-slate-300'}">Hạng #${p.rank}: ${p.nickname}</span>
+          <span class="font-bold text-amber-300">${p.total_score} điểm</span>
+        </li>
+      `).join('');
+    }
+
+    // Tự động kiểm tra URL Hash (#join=OLY-XXX) khi người chơi mở link mời
+    window.addEventListener('load', () => {
+      const hash = window.location.hash;
+      if (hash && hash.includes('join=')) {
+        openJoinModal();
+      }
+    });
+  </script>
+</body>
+</html>

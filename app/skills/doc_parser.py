@@ -1,0 +1,295 @@
+import re
+import uuid
+from pathlib import Path
+from typing import List, Tuple
+from pypdf import PdfReader
+from docx import Document as DocxDocument
+
+from app.models.schemas_extracted import (
+    ChunkMetadata,
+    CoreDefinition,
+    FormulaOrTheorem,
+    CausalRelationship,
+    EdgeCase,
+    ConceptMap,
+    ExtractedKnowledgeBundle,
+    BloomLevel,
+)
+
+class KnowledgeGraphExtractor:
+    """
+    Agent 1: Knowledge_Graph_Extractor
+    Xử lý tài liệu, làm sạch, phân đoạn ngữ cảnh (semantic chunking) 
+    và trích xuất Bản đồ khái niệm (Concept Map) gắn nhãn phân tầng nhận thức Bloom.
+    """
+
+    def __init__(self, chunk_size: int = 800, chunk_overlap: int = 150):
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+
+    def parse_file(self, file_path: str) -> Tuple[str, str, List[Tuple[str, str]]]:
+        path = Path(file_path)
+        ext = path.suffix.lower()
+        title = path.stem.replace("_", " ").title()
+        sections: List[Tuple[str, str]] = []
+
+        if ext == ".pdf":
+            reader = PdfReader(str(path))
+            for i, page in enumerate(reader.pages):
+                txt = page.extract_text() or ""
+                cleaned = self._clean_text(txt)
+                if cleaned:
+                    sections.append((f"Trang {i + 1}", cleaned))
+        elif ext == ".docx":
+            doc = DocxDocument(str(path))
+            current_sec = "Mở đầu"
+            sec_buffer = []
+            for p in doc.paragraphs:
+                txt = p.text.strip()
+                if not txt:
+                    continue
+                if p.style and ("Heading" in p.style.name or "Title" in p.style.name):
+                    if sec_buffer:
+                        sections.append((current_sec, self._clean_text("\n".join(sec_buffer))))
+                        sec_buffer = []
+                    current_sec = txt
+                else:
+                    sec_buffer.append(txt)
+            if sec_buffer:
+                sections.append((current_sec, self._clean_text("\n".join(sec_buffer))))
+        elif ext in [".md", ".txt"]:
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+            parts = re.split(r"(?m)^(?=#{1,3}\s+)", content)
+            for part in parts:
+                clean_part = self._clean_text(part)
+                if clean_part:
+                    match = re.match(r"^#{1,3}\s+(.*)", part)
+                    sec_name = match.group(1).strip() if match else "Nội dung"
+                    sections.append((sec_name, clean_part))
+        else:
+            raise ValueError(f"Định dạng file không hỗ trợ: {ext}")
+
+        full_text = "\n\n".join([text for _, text in sections])
+        return title, full_text, sections
+
+    def _clean_text(self, text: str) -> str:
+        text = re.sub(r"\r\n", "\n", text)
+        text = re.sub(r"[ \t]+", " ", text)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.strip()
+
+    def semantic_chunking(self, sections: List[Tuple[str, str]]) -> List[ChunkMetadata]:
+        chunks: List[ChunkMetadata] = []
+        chunk_idx = 1
+
+        for sec_name, text in sections:
+            paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+            current_chunk = []
+            current_len = 0
+
+            for p in paragraphs:
+                p_len = len(p)
+                if current_len + p_len > self.chunk_size and current_chunk:
+                    chunk_text = " ".join(current_chunk)
+                    bloom = self._infer_chunk_bloom(chunk_text)
+                    chunks.append(
+                        ChunkMetadata(
+                            chunk_id=f"CHK_{chunk_idx:03d}",
+                            content=chunk_text,
+                            page_or_section=sec_name,
+                            token_count_approx=len(chunk_text.split()),
+                            primary_bloom_level=bloom,
+                        )
+                    )
+                    chunk_idx += 1
+                    overlap_tokens = chunk_text.split()[-int(self.chunk_overlap / 5):]
+                    current_chunk = [" ".join(overlap_tokens), p]
+                    current_len = len(current_chunk[0]) + p_len
+                else:
+                    current_chunk.append(p)
+                    current_len += p_len
+
+            if current_chunk:
+                chunk_text = " ".join(current_chunk)
+                bloom = self._infer_chunk_bloom(chunk_text)
+                chunks.append(
+                    ChunkMetadata(
+                        chunk_id=f"CHK_{chunk_idx:03d}",
+                        content=chunk_text,
+                        page_or_section=sec_name,
+                        token_count_approx=len(chunk_text.split()),
+                        primary_bloom_level=bloom,
+                    )
+                )
+                chunk_idx += 1
+
+        return chunks
+
+    def _infer_chunk_bloom(self, text: str) -> BloomLevel:
+        t = text.lower()
+        if any(w in t for w in ["tuy nhiên", "ngoại trừ", "rủi ro", "giới hạn", "ngược lại", "phá vỡ"]):
+            return "ANALYZE_EVALUATE"
+        if any(w in t for w in ["khi", "nếu", "dẫn đến", "công thức", "tính toán", "áp dụng"]):
+            return "APPLY"
+        if any(w in t for w in ["giải thích", "nguyên lý", "bởi vì", "cơ chế"]):
+            return "UNDERSTAND"
+        return "REMEMBER"
+
+    def extract_concept_map(self, chunks: List[ChunkMetadata], doc_title: str) -> ConceptMap:
+        core_defs: List[CoreDefinition] = []
+        formulas: List[FormulaOrTheorem] = []
+        causals: List[CausalRelationship] = []
+        edge_cases: List[EdgeCase] = []
+
+        def_patterns = [
+            r"([A-ZÀ-Ỹa-zà-ỹ0-9\s_-]{3,40})\s+(?:được định nghĩa là|là|chính là|đề cập đến|nghĩa là|is defined as|refers to)\s+([^.,;\n]{15,180})",
+            r"(?:Khái niệm|Thuật ngữ)\s+([A-ZÀ-Ỹa-zà-ỹ0-9\s_-]{3,40})\s*:\s*([^.,;\n]{15,180})",
+            r"\*\*([A-ZÀ-Ỹa-zà-ỹ0-9\s_-]{3,40})\*\*\s*:\s*([^.,;\n]{15,180})",
+        ]
+
+        formula_patterns = [
+            r"(?:Định lý|Nguyên lý|Quy tắc|Định luật|Công thức|Theorem|Principle|Law)\s+([A-ZÀ-Ỹa-zà-ỹ0-9\s_-]{3,40})\s*[:\-–]?\s*([^.\n]{20,200})",
+            r"([A-ZÀ-Ỹa-zà-ỹ0-9\s_-]{3,30})\s+(?:tuân theo nguyên lý|được biểu diễn bằng công thức|khẳng định rằng)\s+([^.\n]{20,200})",
+        ]
+
+        causal_patterns = [
+            r"(?:Khi|Nếu|Do|Bởi vì)\s+([^,]{10,80}),\s*(?:thì|dẫn đến|gây ra|làm cho|khiến cho)\s+([^.\n]{10,120})",
+            r"([^.]{10,80})\s+(?:dẫn tới|gây ra|tác động làm|kéo theo|dẫn đến kết quả)\s+([^.\n]{10,100})",
+        ]
+
+        edge_patterns = [
+            r"(?:Tuy nhiên|Ngoại trừ|Trừ trường hợp|Điểm hạn chế là|Trong điều kiện biên|Tuy thế|Chỉ áp dụng khi)\s*[,:]?\s*([^.\n]{20,180})",
+            r"([^.]{15,100})\s+(?:sẽ thất bại nếu|không hoạt động khi|không còn đúng trong trường hợp)\s+([^.\n]{10,100})",
+        ]
+
+        for chk in chunks:
+            text = chk.content
+
+            # 1. Định nghĩa (Bloom: REMEMBER)
+            for pat in def_patterns:
+                matches = re.finditer(pat, text, re.IGNORECASE)
+                for m in matches:
+                    term = m.group(1).strip()
+                    definition = m.group(2).strip()
+                    if len(term.split()) <= 6 and len(definition) > 15:
+                        core_defs.append(
+                            CoreDefinition(
+                                term=term.capitalize(),
+                                definition=definition,
+                                chunk_id=chk.chunk_id,
+                                exact_quote=m.group(0).strip(),
+                                importance_level="high",
+                                bloom_level="REMEMBER",
+                            )
+                        )
+
+            # 2. Định lý / Công thức (Bloom: APPLY)
+            for pat in formula_patterns:
+                matches = re.finditer(pat, text, re.IGNORECASE)
+                for m in matches:
+                    name = m.group(1).strip()
+                    statement = m.group(2).strip()
+                    formulas.append(
+                        FormulaOrTheorem(
+                            name=f"Nguyên lý {name}",
+                            statement=statement,
+                            conditions="Theo ngữ cảnh tài liệu quy định",
+                            chunk_id=chk.chunk_id,
+                            exact_quote=m.group(0).strip(),
+                            bloom_level="APPLY",
+                        )
+                    )
+
+            # 3. Nhân - Quả (Bloom: APPLY)
+            for pat in causal_patterns:
+                matches = re.finditer(pat, text, re.IGNORECASE)
+                for m in matches:
+                    cause = m.group(1).strip()
+                    effect = m.group(2).strip()
+                    causals.append(
+                        CausalRelationship(
+                            cause=cause,
+                            effect=effect,
+                            mechanism="Liên kết nhân quả trực tiếp",
+                            chunk_id=chk.chunk_id,
+                            exact_quote=m.group(0).strip(),
+                            bloom_level="APPLY",
+                        )
+                    )
+
+            # 4. Ngoại lệ / Biên (Bloom: ANALYZE_EVALUATE)
+            for pat in edge_patterns:
+                matches = re.finditer(pat, text, re.IGNORECASE)
+                for m in matches:
+                    matched_str = m.group(1).strip() if m.lastindex >= 1 else m.group(0).strip()
+                    edge_cases.append(
+                        EdgeCase(
+                            scenario="Tình huống ngoại lệ đặc biệt",
+                            consequence=matched_str,
+                            exception_rule="Cần xử lý rào chắn hoặc xem xét điều kiện ràng buộc",
+                            chunk_id=chk.chunk_id,
+                            exact_quote=m.group(0).strip(),
+                            bloom_level="ANALYZE_EVALUATE",
+                        )
+                    )
+
+        if len(core_defs) < 3 and chunks:
+            for chk in chunks[:4]:
+                sentences = [s.strip() for s in re.split(r"[.!?]", chk.content) if len(s.strip()) > 30]
+                if sentences:
+                    s = sentences[0]
+                    words = s.split()
+                    lead_term = " ".join(words[:3])
+                    core_defs.append(
+                        CoreDefinition(
+                            term=lead_term.capitalize(),
+                            definition=s,
+                            chunk_id=chk.chunk_id,
+                            exact_quote=s,
+                            importance_level="medium",
+                            bloom_level="REMEMBER",
+                        )
+                    )
+
+        if not edge_cases and chunks:
+            edge_cases.append(
+                EdgeCase(
+                    scenario="Điều kiện biên hệ thống",
+                    consequence="Tài liệu yêu cầu tuân thủ đúng các thông số và ngữ cảnh vận hành.",
+                    exception_rule="Kiểm tra tính toàn vẹn dữ liệu và độ trễ.",
+                    chunk_id=chunks[0].chunk_id,
+                    exact_quote=chunks[0].content[:150],
+                    bloom_level="ANALYZE_EVALUATE",
+                )
+            )
+
+        unique_defs = {d.term.lower(): d for d in core_defs}
+        return ConceptMap(
+            core_definitions=list(unique_defs.values())[:12],
+            formulas_and_theorems=formulas[:8],
+            causal_relationships=causals[:8],
+            edge_cases=edge_cases[:6],
+        )
+
+    def process_document(self, file_path: str, doc_id: str = None) -> ExtractedKnowledgeBundle:
+        doc_id = doc_id or f"DOC_{uuid.uuid4().hex[:8]}"
+        title, _, sections = self.parse_file(file_path)
+        chunks = self.semantic_chunking(sections)
+        concept_map = self.extract_concept_map(chunks, title)
+
+        topics = list(set([sec for sec, _ in sections if sec != "Nội dung"]))[:5]
+        if not topics:
+            topics = [title]
+
+        return ExtractedKnowledgeBundle(
+            document_id=doc_id,
+            document_title=title,
+            total_chunks=len(chunks),
+            detected_topics=topics,
+            chunks=chunks,
+            concept_map=concept_map,
+        )
+
+# Tương thích ngược
+DocumentParserAndExtractor = KnowledgeGraphExtractor
