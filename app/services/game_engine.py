@@ -52,18 +52,21 @@ class PracticeAndArenaEngine:
         star_multiplier = 1
         time_expired = False
 
-        # Xác thực thời gian ở Backend đối với chế độ Thi đấu
-        if match_mode == "ARENA_COMPETITION":
-            # Cho phép dung sai mạng 2.5 giây
-            if submission.time_taken_sec > (question.time_limit_sec + 2.5) or user_ans == "(hết thời gian)":
+        # Xác thực thời gian ở Backend đối với chế độ Thi đấu (Arena / Multiplayer)
+        if match_mode in ["ARENA_COMPETITION", "MULTIPLAYER_ARENA"]:
+            # Cho phép dung sai mạng 2.5 giây khi đếm ngược
+            if user_ans == "(hết thời gian)" or (question.time_limit_sec > 0 and submission.time_taken_sec > (question.time_limit_sec + 2.5)):
                 is_correct = False
                 time_expired = True
+        elif match_mode == "PRACTICE_DOJO" and user_ans == "(hết thời gian)":
+            is_correct = False
+            time_expired = True
 
         if is_correct:
             new_streak = current_streak + 1
 
-            if match_mode == "ARENA_COMPETITION":
-                # Thưởng tốc độ chỉ áp dụng ở chế độ thi đấu
+            if match_mode in ["ARENA_COMPETITION", "MULTIPLAYER_ARENA"]:
+                # Thưởng tốc độ chỉ áp dụng ở chế độ thi đấu (dựa trên thời gian còn lại đếm ngược)
                 time_left = max(0.0, question.time_limit_sec - submission.time_taken_sec)
                 if question.time_limit_sec > 0:
                     speed_ratio = time_left / question.time_limit_sec
@@ -86,7 +89,7 @@ class PracticeAndArenaEngine:
             new_total = current_total_score + delta
         else:
             new_streak = 0
-            if match_mode == "ARENA_COMPETITION" and submission.star_of_hope_activated:
+            if match_mode in ["ARENA_COMPETITION", "MULTIPLAYER_ARENA"] and submission.star_of_hope_activated:
                 star_multiplier = -1
                 delta = -base_points
             else:

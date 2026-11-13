@@ -7,6 +7,7 @@ from app.models.schemas_critic import (
     QuestionAuditResult,
     CriticEvaluationReport,
 )
+from app.skills.doc_parser import VIETNAMESE_STOPWORDS
 
 class AdversarialFactChecker:
     """
@@ -73,10 +74,22 @@ class AdversarialFactChecker:
                 notes.append("Có phương án trả lời bị trùng lặp nội dung.")
 
             for opt in opts:
-                if len(opt) < 2 or "phương án phụ" in opt.lower():
-                    distractor_score -= 20
+                opt_lower = opt.lower()
+                if opt_lower in VIETNAMESE_STOPWORDS:
+                    distractor_score = 0.0
+                    is_ambiguous = True
+                    notes.append(f"Phương án '{opt}' là từ nối/hư từ không có nghĩa chuyên môn.")
+                    break
+                if len(opt) < 2 or any(p in opt_lower for p in ["phương án phụ", "gợi ý phụ", "lựa chọn đối sánh", "phương án thay thế", "khái niệm phụ"]):
+                    distractor_score -= 50
+                    is_ambiguous = True
                     notes.append("Phương án gây nhiễu sơ sài hoặc mang tính placeholder.")
                     break
+
+            if question.correct_answer.strip().lower() in VIETNAMESE_STOPWORDS:
+                clarity_score = 0.0
+                is_ambiguous = True
+                notes.append(f"Đáp án đúng '{question.correct_answer}' là từ nối/hư từ không hợp lệ!")
 
             if question.correct_answer not in opts:
                 clarity_score -= 50

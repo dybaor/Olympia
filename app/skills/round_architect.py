@@ -1,7 +1,9 @@
 import random
 import uuid
+import re
 from typing import List, Optional, Dict
 from app.models.schemas_extracted import ExtractedKnowledgeBundle, CoreDefinition, FormulaOrTheorem, CausalRelationship, EdgeCase
+from app.skills.doc_parser import VIETNAMESE_STOPWORDS
 from app.models.schemas_olympic import (
     OlympicQuestion,
     OlympicRoundSet,
@@ -29,6 +31,76 @@ class DynamicOlympicArchitect:
         self.cmap = bundle.concept_map
         self.chunks_dict = {c.chunk_id: c for c in bundle.chunks}
 
+    def _get_domain_distractors(self, target: str, count: int = 3) -> List[str]:
+        """
+        Trích xuất 100% phương án gây nhiễu từ các khái niệm/thuật ngữ chuyên ngành trong tài liệu.
+        Tuyệt đối không dùng từ nối (và, hoặc, là, của...), hư từ hoặc placeholder rác.
+        """
+        target_norm = target.strip().lower()
+        candidates = []
+        seen = {target_norm}
+
+        # 1. Thuật ngữ từ core_definitions
+        for d in self.cmap.core_definitions:
+            term = d.term.strip()
+            norm = term.lower()
+            if norm not in seen and norm not in VIETNAMESE_STOPWORDS and len(term) >= 2:
+                candidates.append(term)
+                seen.add(norm)
+
+        # 2. Thuật ngữ từ domain_glossary
+        for term in getattr(self.cmap, "domain_glossary", []):
+            term = term.strip()
+            norm = term.lower()
+            if norm not in seen and norm not in VIETNAMESE_STOPWORDS and len(term) >= 2:
+                candidates.append(term)
+                seen.add(norm)
+
+        # 3. Tên định lý / công thức
+        for f in self.cmap.formulas_and_theorems:
+            term = f.name.replace("Nguyên lý", "").strip()
+            norm = term.lower()
+            if norm not in seen and norm not in VIETNAMESE_STOPWORDS and len(term) >= 2:
+                candidates.append(term)
+                seen.add(norm)
+
+        # 4. Chủ đề tài liệu
+        for top in self.bundle.detected_topics:
+            norm = top.strip().lower()
+            if norm not in seen and norm not in VIETNAMESE_STOPWORDS and len(top.strip()) >= 2:
+                candidates.append(top.strip())
+                seen.add(norm)
+
+        if len(candidates) >= count:
+            return random.sample(candidates, count)
+
+        # 5. Quét thêm từ viết tắt kỹ thuật từ các chunks
+        for chk in self.bundle.chunks:
+            for w in re.findall(r"\b[A-Z0-9]{2,8}(?:/[A-Z0-9]+)?\b", chk.content):
+                norm = w.lower()
+                if norm not in seen and norm not in VIETNAMESE_STOPWORDS and not w.isnumeric():
+                    candidates.append(w)
+                    seen.add(norm)
+                    if len(candidates) >= count:
+                        break
+            if len(candidates) >= count:
+                break
+
+        # Fallback an toàn nếu tài liệu cực ngắn: dùng các khái niệm mạng/hệ thống chuẩn mực
+        safe_domain_terms = [
+            "Độ trễ truyền dẫn (Propagation Delay)",
+            "Băng thông mạng (Network Bandwidth)",
+            "Giao thức định tuyến (Routing Protocol)",
+            "Kiến trúc phân tầng (Layered Architecture)",
+            "Tính toàn vẹn dữ liệu (Data Integrity)",
+        ]
+        for sdt in safe_domain_terms:
+            if sdt.lower() not in seen and len(candidates) < count:
+                candidates.append(sdt)
+                seen.add(sdt.lower())
+
+        return candidates[:count]
+
     def generate_round_1_khoi_dong(self, config: RoundConfig = None) -> OlympicRoundSet:
         cfg = config or RoundConfig(round_number=1, difficulty="MEDIUM", time_limit_sec=15, question_count=8)
         count = cfg.question_count
@@ -36,19 +108,14 @@ class DynamicOlympicArchitect:
         time_sec = cfg.time_limit_sec
 
         questions: List[OlympicQuestion] = []
-        defs = list(self.cmap.core_definitions)
-        random.shuffle(defs)
+        valid_defs = [
+            d for d in self.cmap.core_definitions 
+            if d.term.lower() not in VIETNAMESE_STOPWORDS and len(d.term.strip()) >= 2
+        ]
+        random.shuffle(valid_defs)
 
-        all_terms = [d.term for d in defs]
-        if len(all_terms) < 4:
-            all_terms.extend(["Độ phức tạp thuật toán", "Tính toàn vẹn dữ liệu", "Bất biến hệ thống", "Mô hình xác thực"])
-
-        for i, item in enumerate(defs[:count]):
-            other_terms = [t for t in all_terms if t.lower() != item.term.lower()]
-            distractors = random.sample(other_terms, min(3, len(other_terms)))
-            while len(distractors) < 3:
-                distractors.append(f"Khái niệm phụ {len(distractors) + 1}")
-
+        for i, item in enumerate(valid_defs[:count]):
+            distractors = self._get_domain_distractors(item.term, count=3)
             options = [item.term] + distractors
             random.shuffle(options)
 
@@ -126,21 +193,28 @@ class DynamicOlympicArchitect:
 
         candidate_keywords = []
         if self.bundle.detected_topics:
-            candidate_keywords.extend([t.upper().replace(" ", "") for t in self.bundle.detected_topics if 4 <= len(t.replace(" ", "")) <= 20])
+            candidate_keywords.extend([t.upper().replace(" ", "") for t in self.bundle.detected_topics if 4 <= len(t.replace(" ", "")) <= 20 and t.lower() not in VIETNAMESE_STOPWORDS])
         if self.cmap.core_definitions:
-            candidate_keywords.extend([d.term.upper().replace(" ", "") for d in self.cmap.core_definitions if 4 <= len(d.term.replace(" ", "")) <= 20])
+            candidate_keywords.extend([d.term.upper().replace(" ", "") for d in self.cmap.core_definitions if 4 <= len(d.term.replace(" ", "")) <= 20 and d.term.lower() not in VIETNAMESE_STOPWORDS])
+        for term in getattr(self.cmap, "domain_glossary", []):
+            if 4 <= len(term.replace(" ", "")) <= 20 and term.lower() not in VIETNAMESE_STOPWORDS:
+                candidate_keywords.append(term.upper().replace(" ", ""))
 
-        obstacle_keyword = candidate_keywords[0] if candidate_keywords else "DONG THUAN"
-        obstacle_keyword = "".join(ch for ch in obstacle_keyword if ch.isalnum() or ch == " ")
+        obstacle_keyword = candidate_keywords[0] if candidate_keywords else "DONGTHUAN"
+        obstacle_keyword = "".join(ch for ch in obstacle_keyword if ch.isalnum())
 
         questions: List[OlympicQuestion] = []
         clue_pool = []
         for d in self.cmap.core_definitions:
-            clue_pool.append((d.term, d.definition, d.chunk_id, d.exact_quote, "Concept", "REMEMBER"))
+            if d.term.lower() not in VIETNAMESE_STOPWORDS and len(d.term.strip()) >= 2:
+                clue_pool.append((d.term, d.definition, d.chunk_id, d.exact_quote, "Concept", "REMEMBER"))
         for f in self.cmap.formulas_and_theorems:
-            clue_pool.append((f.name, f.statement, f.chunk_id, f.exact_quote, "Formula", "UNDERSTAND"))
+            name_clean = f.name.replace("Nguyên lý", "").strip()
+            if name_clean.lower() not in VIETNAMESE_STOPWORDS:
+                clue_pool.append((name_clean, f.statement, f.chunk_id, f.exact_quote, "Formula", "UNDERSTAND"))
         for c in self.cmap.causal_relationships:
-            clue_pool.append((c.cause, f"Nguyên nhân kích hoạt hệ quả '{c.effect}'", c.chunk_id, c.exact_quote, "Causality", "APPLY"))
+            if c.cause.lower() not in VIETNAMESE_STOPWORDS:
+                clue_pool.append((c.cause, f"Nguyên nhân kích hoạt hệ quả '{c.effect}'", c.chunk_id, c.exact_quote, "Causality", "APPLY"))
 
         random.shuffle(clue_pool)
         selected_clues = clue_pool[:count]
@@ -165,12 +239,8 @@ class DynamicOlympicArchitect:
             chunk_meta = self.chunks_dict.get(chunk_id)
             sec_name = chunk_meta.page_or_section if chunk_meta else "Tài liệu gốc"
 
-            options = [answer]
-            for other in clue_pool:
-                if other[0] != answer and len(options) < 4:
-                    options.append(other[0])
-            while len(options) < 4:
-                options.append(f"Gợi ý phụ {len(options)}")
+            distractors = self._get_domain_distractors(answer, count=3)
+            options = [answer] + distractors
             random.shuffle(options)
 
             steps = [

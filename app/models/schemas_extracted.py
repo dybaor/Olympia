@@ -47,6 +47,10 @@ class ConceptMap(BaseModel):
     formulas_and_theorems: List[FormulaOrTheorem] = Field(default_factory=list)
     causal_relationships: List[CausalRelationship] = Field(default_factory=list)
     edge_cases: List[EdgeCase] = Field(default_factory=list)
+    domain_glossary: List[str] = Field(
+        default_factory=list, 
+        description="Ngân hàng thuật ngữ chuyên môn, từ viết tắt và khái niệm chuẩn xác trích xuất từ tài liệu"
+    )
 
 class ExtractedKnowledgeBundle(BaseModel):
     document_id: str

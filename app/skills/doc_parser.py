@@ -1,7 +1,7 @@
 import re
 import uuid
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional, Dict, Set
 from pypdf import PdfReader
 from docx import Document as DocxDocument
 
@@ -15,6 +15,76 @@ from app.models.schemas_extracted import (
     ExtractedKnowledgeBundle,
     BloomLevel,
 )
+
+VIETNAMESE_STOPWORDS = {
+    "và", "hoặc", "hay", "là", "của", "với", "trong", "cho", "từ", "ở", "tại", "do",
+    "bởi", "khi", "nếu", "thì", "được", "bị", "các", "những", "một", "này", "đó",
+    "kia", "sự", "việc", "quá trình", "theo", "như", "nhưng", "tuy", "vì", "vậy",
+    "để", "nên", "mỗi", "mọi", "cả", "nhiều", "ít", "đang", "đã", "sẽ", "vừa",
+    "mới", "cũng", "vẫn", "chỉ", "luôn", "thường", "rất", "quá", "lắm", "hơn",
+    "nhất", "không", "chưa", "chẳng", "sau", "trước", "giữa", "dưới", "trên",
+    "ngoài", "bên", "qua", "lại", "ra", "vào", "lên", "xuống", "đến", "tới",
+    "and", "or", "is", "are", "the", "a", "an", "of", "in", "to", "for", "with",
+    "on", "at", "by", "from", "as", "that", "this", "these", "those", "it", "its"
+}
+
+def clean_and_validate_term(raw_term: str, original_text: str = "") -> Optional[str]:
+    """
+    Chuẩn hóa và bảo tồn chính xác thuật ngữ chuyên ngành, từ viết tắt và dạng song ngữ:
+    - Loại bỏ triệt để từ nối (và, hoặc, là, của, với...), hư từ tiếng Việt / tiếng Anh.
+    - Giữ nguyên casing của từ viết tắt (HTTP, TCP, UDP, LAN, WAN, DSL, HFC, FTTH, CIDR, NAT, IPv4, IPv6...).
+    - Giữ nguyên cấu trúc song ngữ: 'Mạng truy cập (Access Networks)'.
+    """
+    if not raw_term:
+        return None
+
+    term = raw_term.strip().strip(":;.,-_–—*\"' \t\n[]{}")
+    if not term:
+        return None
+
+    # Lọc bỏ tiền tố từ nối/hư từ
+    stop_prefixes = [
+        "và ", "hoặc ", "hay ", "nhưng ", "do đó ", "vì vậy ", "trong đó ", "ngoài ra ",
+        "bởi vì ", "khi ", "nếu ", "thì ", "là ", "của ", "với ", "trong ", "cho ", "tại ",
+        "các ", "những ", "một ", "đây là ", "đó là ", "như là ", "được xem là ", "gọi là ",
+        "khái niệm ", "thuật ngữ ", "về ", "đối với ", "theo ",
+        "and ", "or ", "the ", "a ", "an ", "in ", "with ", "for ", "by ", "is "
+    ]
+    changed = True
+    while changed:
+        changed = False
+        lower_t = term.lower()
+        for p in stop_prefixes:
+            if lower_t.startswith(p):
+                term = term[len(p):].strip().strip(":;.,-_–—*\"' \t\n[]{}")
+                changed = True
+                break
+
+    if not term:
+        return None
+
+    lower_cleaned = term.lower()
+    if lower_cleaned in VIETNAMESE_STOPWORDS:
+        return None
+
+    if len(term) < 2 or len(term) > 60:
+        return None
+
+    if lower_cleaned in ["điều này", "yếu tố này", "vấn đề này", "khái niệm này", "mục này", "phần này", "hệ thống này"]:
+        return None
+
+    # Bảo tồn casing từ văn bản gốc
+    if original_text:
+        pattern = re.compile(r"\b" + re.escape(term) + r"\b", re.IGNORECASE)
+        match = pattern.search(original_text)
+        if match:
+            return match.group(0).strip()
+
+    # Nếu có ký tự in hoa (như TCP, UDP, DSL, IPv6), giữ nguyên
+    if any(c.isupper() for c in term[1:]):
+        return term
+
+    return term[0].upper() + term[1:]
 
 class KnowledgeGraphExtractor:
     """
@@ -141,11 +211,20 @@ class KnowledgeGraphExtractor:
         formulas: List[FormulaOrTheorem] = []
         causals: List[CausalRelationship] = []
         edge_cases: List[EdgeCase] = []
+        domain_terms_set = set()
 
         def_patterns = [
-            r"([A-ZÀ-Ỹa-zà-ỹ0-9\s_-]{3,40})\s+(?:được định nghĩa là|là|chính là|đề cập đến|nghĩa là|is defined as|refers to)\s+([^.,;\n]{15,180})",
-            r"(?:Khái niệm|Thuật ngữ)\s+([A-ZÀ-Ỹa-zà-ỹ0-9\s_-]{3,40})\s*:\s*([^.,;\n]{15,180})",
-            r"\*\*([A-ZÀ-Ỹa-zà-ỹ0-9\s_-]{3,40})\*\*\s*:\s*([^.,;\n]{15,180})",
+            # 1. Dạng có từ khóa định nghĩa chuẩn xác (ưu tiên)
+            r"([A-ZÀ-Ỹa-zà-ỹ0-9\s_\-/(/)]+?)\s+(?:được định nghĩa là|chính là|đề cập đến|nghĩa là|is defined as|refers to)\s+([^.,;\n]{15,180})",
+            # 2. Dạng Khái niệm / Thuật ngữ / In đậm
+            r"(?:Khái niệm|Thuật ngữ)\s+([A-ZÀ-Ỹa-zà-ỹ0-9\s_\-/(/)]+?)\s*:\s*([^.,;\n]{15,180})",
+            r"\*\*([A-ZÀ-Ỹa-zà-ỹ0-9\s_\-/(/)]+?)\*\*\s*:\s*([^.,;\n]{15,180})",
+            # 3. Dạng song ngữ: Mạng truy cập (Access Networks) là...
+            r"([A-ZÀ-Ỹa-zà-ỹ0-9\s_\-]+\s*\([A-Za-z0-9\s/_\-]+\))\s+là\s+([^.,;\n]{15,180})",
+            # 4. Dạng từ viết tắt kỹ thuật: HTTP là..., TCP là...
+            r"\b([A-Z0-9]{2,8}(?:/[A-Z0-9]+)?)\s+là\s+([^.,;\n]{15,180})",
+            # 5. Dạng chung '... là ...'
+            r"([A-ZÀ-Ỹa-zà-ỹ0-9\s_\-/(/)]+?)\s+là\s+([^.,;\n]{15,180})",
         ]
 
         formula_patterns = [
@@ -166,33 +245,60 @@ class KnowledgeGraphExtractor:
         for chk in chunks:
             text = chk.content
 
+            # Bóc tách ngân hàng thuật ngữ chuyên môn từ chunk
+            # a. Từ viết tắt kỹ thuật (HTTP, TCP, UDP, LAN, WAN, DSL, HFC, FTTH, CIDR, NAT, IPv4, IPv6...)
+            for acronym in re.findall(r"\b[A-Z0-9]{2,8}(?:/[A-Z0-9]+)?\b", text):
+                if acronym.lower() not in VIETNAMESE_STOPWORDS and not acronym.isnumeric():
+                    domain_terms_set.add(acronym)
+
+            # b. Thuật ngữ in đậm
+            for b_term in re.findall(r"\*\*([^*]{2,40})\*\*", text):
+                cleaned_b = clean_and_validate_term(b_term, text)
+                if cleaned_b:
+                    domain_terms_set.add(cleaned_b)
+
+            # c. Thuật ngữ song ngữ (VD: Mạng truy cập (Access Networks))
+            for biling in re.findall(r"\b([A-ZÀ-Ỹa-zà-ỹ0-9\s_-]{2,30}\s*\([A-Za-z0-9\s/_\-]+\))", text):
+                cleaned_bi = clean_and_validate_term(biling, text)
+                if cleaned_bi:
+                    domain_terms_set.add(cleaned_bi)
+
             # 1. Định nghĩa (Bloom: REMEMBER)
             for pat in def_patterns:
                 matches = re.finditer(pat, text, re.IGNORECASE)
                 for m in matches:
-                    term = m.group(1).strip()
+                    raw_term = m.group(1).strip()
                     definition = m.group(2).strip()
-                    if len(term.split()) <= 6 and len(definition) > 15:
-                        core_defs.append(
-                            CoreDefinition(
-                                term=term.capitalize(),
-                                definition=definition,
-                                chunk_id=chk.chunk_id,
-                                exact_quote=m.group(0).strip(),
-                                importance_level="high",
-                                bloom_level="REMEMBER",
-                            )
+                    term = clean_and_validate_term(raw_term, text)
+                    if not term:
+                        continue
+                    if len(term.split()) > 7 or len(definition) < 15:
+                        continue
+
+                    domain_terms_set.add(term)
+                    core_defs.append(
+                        CoreDefinition(
+                            term=term,
+                            definition=definition,
+                            chunk_id=chk.chunk_id,
+                            exact_quote=m.group(0).strip(),
+                            importance_level="high",
+                            bloom_level="REMEMBER",
                         )
+                    )
 
             # 2. Định lý / Công thức (Bloom: APPLY)
             for pat in formula_patterns:
                 matches = re.finditer(pat, text, re.IGNORECASE)
                 for m in matches:
-                    name = m.group(1).strip()
+                    raw_name = m.group(1).strip()
+                    name = clean_and_validate_term(raw_name, text) or raw_name.strip()
                     statement = m.group(2).strip()
+                    formula_name = f"Nguyên lý {name}" if not name.lower().startswith("nguyên lý") else name
+                    domain_terms_set.add(name)
                     formulas.append(
                         FormulaOrTheorem(
-                            name=f"Nguyên lý {name}",
+                            name=formula_name,
                             statement=statement,
                             conditions="Theo ngữ cảnh tài liệu quy định",
                             chunk_id=chk.chunk_id,
@@ -234,23 +340,30 @@ class KnowledgeGraphExtractor:
                         )
                     )
 
+        # Fallback an toàn: nếu thiếu định nghĩa, quét các thuật ngữ in đậm hoặc từ viết tắt trong tài liệu
         if len(core_defs) < 3 and chunks:
             for chk in chunks[:4]:
                 sentences = [s.strip() for s in re.split(r"[.!?]", chk.content) if len(s.strip()) > 30]
-                if sentences:
-                    s = sentences[0]
-                    words = s.split()
-                    lead_term = " ".join(words[:3])
-                    core_defs.append(
-                        CoreDefinition(
-                            term=lead_term.capitalize(),
-                            definition=s,
-                            chunk_id=chk.chunk_id,
-                            exact_quote=s,
-                            importance_level="medium",
-                            bloom_level="REMEMBER",
-                        )
-                    )
+                for s in sentences:
+                    # Tìm thuật ngữ in đậm hoặc từ viết tắt trong câu này
+                    found_terms = re.findall(r"\*\*([^*]{2,40})\*\*", s) or re.findall(r"\b[A-Z0-9]{2,8}(?:/[A-Z0-9]+)?\b", s)
+                    for ft in found_terms:
+                        cleaned_ft = clean_and_validate_term(ft, s)
+                        if cleaned_ft and cleaned_ft.lower() not in [d.term.lower() for d in core_defs]:
+                            core_defs.append(
+                                CoreDefinition(
+                                    term=cleaned_ft,
+                                    definition=s,
+                                    chunk_id=chk.chunk_id,
+                                    exact_quote=s,
+                                    importance_level="medium",
+                                    bloom_level="REMEMBER",
+                                )
+                            )
+                            domain_terms_set.add(cleaned_ft)
+                            break
+                    if len(core_defs) >= 6:
+                        break
 
         if not edge_cases and chunks:
             edge_cases.append(
@@ -264,12 +377,22 @@ class KnowledgeGraphExtractor:
                 )
             )
 
-        unique_defs = {d.term.lower(): d for d in core_defs}
+        unique_defs = {d.term.lower(): d for d in core_defs if d.term.lower() not in VIETNAMESE_STOPWORDS}
+        for d in unique_defs.values():
+            domain_terms_set.add(d.term)
+
+        # Danh mục thuật ngữ chuyên ngành đã làm sạch
+        glossary_list = [
+            t for t in sorted(domain_terms_set, key=lambda x: (len(x), x))
+            if t.lower() not in VIETNAMESE_STOPWORDS and len(t) >= 2
+        ]
+
         return ConceptMap(
-            core_definitions=list(unique_defs.values())[:12],
-            formulas_and_theorems=formulas[:8],
-            causal_relationships=causals[:8],
-            edge_cases=edge_cases[:6],
+            core_definitions=list(unique_defs.values())[:15],
+            formulas_and_theorems=formulas[:10],
+            causal_relationships=causals[:10],
+            edge_cases=edge_cases[:8],
+            domain_glossary=glossary_list,
         )
 
     def process_document(self, file_path: str, doc_id: str = None) -> ExtractedKnowledgeBundle:

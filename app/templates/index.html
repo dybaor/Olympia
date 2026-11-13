@@ -238,15 +238,23 @@
         </div>
 
         <!-- BỘ LỌC LUYỆN TẬP (Chỉ hiện khi chọn PRACTICE_DOJO) -->
-        <div id="practiceFilterSection" class="hidden space-y-2 bg-arena-900/80 p-4 rounded-xl border border-cyan-800/50">
-          <label class="text-xs font-bold text-cyan-300 uppercase">Phạm Vi Luyện Tập:</label>
-          <select id="practiceFilterSelect" class="w-full bg-arena-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500">
-            <option value="ALL_ROUNDS">Luyện tập toàn bộ 4 vòng thi</option>
-            <option value="ONLY_ROUND_1">Chỉ tập trung: Vòng 1 (Khởi động - Nhận diện tốc độ)</option>
-            <option value="ONLY_ROUND_2">Chỉ tập trung: Vòng 2 (Vượt chướng ngại vật - Tư duy liên kết)</option>
-            <option value="ONLY_ROUND_3">Chỉ tập trung: Vòng 3 (Tăng tốc - Tình huống suy luận đa bước)</option>
-            <option value="ONLY_ROUND_4">Chỉ tập trung: Vòng 4 (Về đích - Phản biện & Điều kiện biên)</option>
-          </select>
+        <div id="practiceFilterSection" class="hidden space-y-3 bg-arena-900/80 p-4 rounded-xl border border-cyan-800/50">
+          <div>
+            <label class="text-xs font-bold text-cyan-300 uppercase">Phạm Vi Luyện Tập:</label>
+            <select id="practiceFilterSelect" class="w-full mt-1 bg-arena-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500">
+              <option value="ALL_ROUNDS">Luyện tập toàn bộ 4 vòng thi</option>
+              <option value="ONLY_ROUND_1">Chỉ tập trung: Vòng 1 (Khởi động - Nhận diện tốc độ)</option>
+              <option value="ONLY_ROUND_2">Chỉ tập trung: Vòng 2 (Vượt chướng ngại vật - Tư duy liên kết)</option>
+              <option value="ONLY_ROUND_3">Chỉ tập trung: Vòng 3 (Tăng tốc - Tình huống suy luận đa bước)</option>
+              <option value="ONLY_ROUND_4">Chỉ tập trung: Vòng 4 (Về đích - Phản biện & Điều kiện biên)</option>
+            </select>
+          </div>
+          <div class="flex items-center space-x-2 pt-1 border-t border-slate-800">
+            <input type="checkbox" id="practiceUnlimitedTime" class="w-4 h-4 rounded accent-cyan-500 cursor-pointer" />
+            <label for="practiceUnlimitedTime" class="text-xs text-cyan-200 cursor-pointer flex items-center gap-1.5 font-medium">
+              <span>Tắt giới hạn thời gian (Hiển thị vô cực <b class="text-base text-cyan-300 font-mono">∞</b>)</span>
+            </label>
+          </div>
         </div>
 
         <!-- CẤU HÌNH THỜI GIAN & ĐỘ KHÓ 4 VÒNG -->
@@ -461,8 +469,9 @@
           </div>
 
           <!-- Timer Box -->
-          <div id="timerBox" class="w-12 h-12 rounded-xl bg-arena-900 border-2 border-cyan-500 flex flex-col items-center justify-center shadow-lg transition-all">
-            <span id="timerText" class="text-lg font-black text-cyan-400 font-mono">15</span>
+          <div id="timerBox" class="min-w-[4.8rem] h-12 px-3 rounded-xl bg-arena-900 border-2 border-cyan-500 flex items-center justify-center space-x-1.5 shadow-lg transition-all">
+            <span id="timerIcon" class="text-xs text-cyan-400">⏳</span>
+            <span id="timerText" class="text-base font-black text-cyan-400 font-mono">15s</span>
           </div>
         </div>
       </div>
@@ -1119,46 +1128,79 @@
         });
       }
 
-      startTimer(question.time_limit_sec || 20);
+      if (appState.matchMode === 'PRACTICE_DOJO') {
+        const unlimited = document.getElementById('practiceUnlimitedTime')?.checked;
+        if (unlimited) {
+          startTimer(0);
+        } else {
+          startTimer(question.time_limit_sec || 20);
+        }
+      } else {
+        startTimer(question.time_limit_sec || 20);
+      }
     }
 
-    // ĐỒNG HỒ ĐẾM NGƯỢC
+    // ĐỒNG HỒ ĐẾM NGƯỢC (COUNTDOWN TIMER)
     function startTimer(seconds) {
-      appState.secondsLeft = seconds;
-      appState.totalTimeLimit = seconds;
+      clearInterval(appState.timerInterval);
       const timerText = document.getElementById('timerText');
       const timerBox = document.getElementById('timerBox');
+      const timerIcon = document.getElementById('timerIcon');
 
-      if (appState.matchMode === 'PRACTICE_DOJO') {
-        // Chế độ Luyện tập: Đồng hồ bấm giờ đếm tiến (tham khảo)
-        let elapsed = 0;
-        timerText.innerText = '0s';
-        timerBox.className = 'w-12 h-12 rounded-xl bg-arena-900 border-2 border-cyan-500/50 flex flex-col items-center justify-center shadow-lg';
-        appState.timerInterval = setInterval(() => {
-          elapsed++;
-          timerText.innerText = elapsed + 's';
-        }, 1000);
-      } else {
-        // Chế độ Thi đấu: Đếm ngược nghiêm ngặt
-        timerText.innerText = appState.secondsLeft;
-        timerBox.className = 'w-12 h-12 rounded-xl bg-arena-900 border-2 border-cyan-500 flex flex-col items-center justify-center shadow-lg transition-all';
-
-        appState.timerInterval = setInterval(() => {
-          appState.secondsLeft--;
-          timerText.innerText = appState.secondsLeft;
-          audioSynth.playTick();
-
-          if (appState.secondsLeft <= 5) {
-            timerBox.className = 'w-12 h-12 rounded-xl bg-red-950/80 border-2 border-red-500 flex flex-col items-center justify-center shadow-lg animate-pulse';
-            timerText.className = 'text-lg font-black text-red-400 font-mono';
-          }
-
-          if (appState.secondsLeft <= 0) {
-            clearInterval(appState.timerInterval);
-            submitUserAnswer('(Hết thời gian)');
-          }
-        }, 1000);
+      // Khôi phục kiểu dáng mặc định ban đầu
+      timerBox.className = 'min-w-[4.8rem] h-12 px-3 rounded-xl bg-arena-900 border-2 border-cyan-500 flex items-center justify-center space-x-1.5 shadow-lg transition-all';
+      timerText.className = 'text-base font-black text-cyan-400 font-mono';
+      if (timerIcon) {
+        timerIcon.className = 'text-xs text-cyan-400';
+        timerIcon.innerText = '⏳';
       }
+
+      // TRƯỜNG HỢP 1: Chế độ Luyện tập không giới hạn thời gian -> hiển thị biểu tượng vô cực ∞
+      if (appState.matchMode === 'PRACTICE_DOJO' && (!seconds || seconds <= 0)) {
+        if (timerIcon) timerIcon.innerText = '♾️';
+        timerText.innerText = '∞';
+        return;
+      }
+
+      // TRƯỜNG HỢP 2: Đếm ngược từ time_limit về 0s
+      const limit = Math.max(1, parseInt(seconds) || 20);
+      appState.totalTimeLimit = limit;
+      appState.secondsLeft = limit;
+      timerText.innerText = appState.secondsLeft + 's';
+
+      appState.timerInterval = setInterval(() => {
+        appState.secondsLeft--;
+        if (appState.secondsLeft < 0) appState.secondsLeft = 0;
+        timerText.innerText = appState.secondsLeft + 's';
+
+        // Tỷ lệ thời gian còn lại
+        const ratio = appState.secondsLeft / appState.totalTimeLimit;
+
+        // Cảnh báo khi còn dưới 20% thời gian hoặc <= 5s: đổi màu đỏ và có hiệu ứng cảnh báo
+        if (appState.secondsLeft <= 5 || ratio <= 0.2) {
+          timerBox.className = 'min-w-[4.8rem] h-12 px-3 rounded-xl bg-red-950/80 border-2 border-red-500 flex items-center justify-center space-x-1.5 shadow-lg animate-pulse';
+          timerText.className = 'text-base font-black text-red-400 font-mono';
+          if (timerIcon) {
+            timerIcon.className = 'text-xs text-red-400 animate-spin';
+          }
+          audioSynth.playTick();
+        }
+
+        // Khi đồng hồ đếm về 0s
+        if (appState.secondsLeft <= 0) {
+          clearInterval(appState.timerInterval);
+
+          // Khóa tất cả các nút chọn đáp án ngay lập tức
+          const optButtons = document.querySelectorAll('#optionsContainer button');
+          optButtons.forEach(btn => {
+            btn.disabled = true;
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+          });
+
+          // Tự động nộp bài hết giờ
+          submitUserAnswer('(Hết thời gian)');
+        }
+      }, 1000);
     }
 
     // GỢI Ý 2 TẦNG (PRACTICE DOJO)

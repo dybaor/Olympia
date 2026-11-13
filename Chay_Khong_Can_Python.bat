@@ -1,4 +1,5 @@
 @echo off
+setlocal
 title Dau Truong Tri Thuc - Olympic Arena (Standalone)
 cd /d "%~dp0"
 
@@ -8,15 +9,15 @@ echo    Che do chay truc tiep - Khong can cai dat Python!
 echo ======================================================================
 echo.
 
-:: Tu dong mo trinh duyet sau 2 giay
-start "" cmd /c "timeout /t 2 /nobreak >nul & start http://localhost:8000"
+start http://localhost:8000
 
-:: Khoi chay ban Standalone Portable EXE
-cd dist\ArenaOlympic
-ArenaOlympic.exe
-
-if %ERRORLEVEL% NEQ 0 (
-    echo.
-    echo [ERROR] Ung dung gap su co khi khoi chay.
+if exist "dist\OlympicArena\OlympicArena.exe" (
+    cd /d "%~dp0dist\OlympicArena"
+    OlympicArena.exe
+) else if exist "dist\ArenaOlympic\ArenaOlympic.exe" (
+    cd /d "%~dp0dist\ArenaOlympic"
+    ArenaOlympic.exe
+) else (
+    echo [ERROR] Khong tim thay file thuc thi Portable!
     pause
 )

@@ -40,19 +40,37 @@ templates_dir.mkdir(parents=True, exist_ok=True)
 static_dir.mkdir(parents=True, exist_ok=True)
 
 app.mount("/static", StaticFiles(directory=str(static_dir), check_dir=False), name="static")
-templates = Jinja2Templates(directory=str(templates_dir))
 
 app.include_router(docs_router)
 app.include_router(game_router)
 app.include_router(multiplayer_router)
 
+def find_index_html() -> str | None:
+    search_paths = [
+        templates_dir / "index.html",
+        BUNDLE_DIR / "app" / "templates" / "index.html",
+        BASE_DIR / "app" / "templates" / "index.html",
+        BASE_DIR / "_internal" / "app" / "templates" / "index.html",
+        Path(__file__).resolve().parent / "templates" / "index.html",
+    ]
+    for p in search_paths:
+        if p.exists():
+            try:
+                return p.read_text(encoding="utf-8")
+            except Exception:
+                pass
+    return None
+
 @app.get("/", response_class=HTMLResponse)
 def serve_home(request: Request):
-    html_file = templates_dir / "index.html"
-    if html_file.exists():
-        with open(html_file, "r", encoding="utf-8") as f:
-            return HTMLResponse(content=f.read())
-    return templates.TemplateResponse(request=request, name="index.html")
+    html_content = find_index_html()
+    if html_content:
+        return HTMLResponse(content=html_content)
+    return HTMLResponse(content="<h1>Olympic Knowledge Arena</h1><p>index.html not found. Vui long kiem tra file template.</p>", status_code=500)
+
+@app.post("/heartbeat")
+def heartbeat():
+    return {"status": "alive"}
 
 @app.get("/health")
 def health_check():

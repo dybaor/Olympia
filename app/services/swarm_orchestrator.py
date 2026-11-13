@@ -3,7 +3,7 @@ from typing import Dict, Any, Tuple
 from app.models.schemas_extracted import ExtractedKnowledgeBundle
 from app.models.schemas_olympic import FullOlympicExam, OlympicRoundSet, OlympicQuestion, UserMatchConfig, RoundConfig
 from app.models.schemas_critic import CriticEvaluationReport
-from app.skills.doc_parser import KnowledgeGraphExtractor
+from app.skills.doc_parser import KnowledgeGraphExtractor, VIETNAMESE_STOPWORDS
 from app.skills.round_architect import DynamicOlympicArchitect
 from app.skills.fact_critic import AdversarialFactChecker
 from app.core.config import MAX_RETRY_ATTEMPTS
@@ -88,22 +88,34 @@ class SwarmOrchestrator:
             seen = set()
             for opt in fixed_q.options:
                 cleaned = opt.strip()
-                if "phương án phụ" in cleaned.lower() or "gợi ý phụ" in cleaned.lower():
-                    cleaned = f"Lựa chọn đối sánh {len(clean_opts)+1}"
-                if cleaned not in seen:
+                lower_c = cleaned.lower()
+                # Loại bỏ từ nối, hư từ hoặc placeholder rác
+                if lower_c in VIETNAMESE_STOPWORDS or any(p in lower_c for p in ["phương án phụ", "gợi ý phụ", "lựa chọn đối sánh", "phương án thay thế", "khái niệm phụ"]):
+                    continue
+                if cleaned not in seen and len(cleaned) >= 2:
                     clean_opts.append(cleaned)
                     seen.add(cleaned)
 
-            while len(clean_opts) < 4:
-                alt = f"Phương án thay thế {len(clean_opts)+1}"
-                if alt not in seen:
-                    clean_opts.append(alt)
-                    seen.add(alt)
+            # Đảm bảo đáp án đúng luôn có trong options
+            if fixed_q.correct_answer not in seen:
+                clean_opts.insert(0, fixed_q.correct_answer)
+                seen.add(fixed_q.correct_answer)
 
-            if fixed_q.correct_answer not in clean_opts:
-                clean_opts[0] = fixed_q.correct_answer
+            # Điền thêm từ các thuật ngữ chuyên ngành thật trong tài liệu nếu thiếu options
+            source_candidates = (
+                getattr(bundle.concept_map, "domain_glossary", [])
+                + [d.term for d in bundle.concept_map.core_definitions]
+                + bundle.detected_topics
+            )
+            for cand in source_candidates:
+                cand_clean = cand.strip()
+                if cand_clean not in seen and cand_clean.lower() not in VIETNAMESE_STOPWORDS and len(cand_clean) >= 2:
+                    clean_opts.append(cand_clean)
+                    seen.add(cand_clean)
+                    if len(clean_opts) >= 4:
+                        break
 
-            fixed_q.options = clean_opts
+            fixed_q.options = clean_opts[:4]
 
         chunks_map = {c.chunk_id: c for c in bundle.chunks}
         cit = fixed_q.source_citation
