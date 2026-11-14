@@ -61,6 +61,10 @@ class MultiplayerRoom:
         self.answers_for_current_q: Dict[str, Dict[str, Any]] = {}
         self.round1_history: Dict[str, Dict[str, Any]] = {}
         self.round1_start_scores: Dict[str, int] = {}
+        self.r1_finished_players: set = set()
+        self.r1_safe_questions: List[Dict[str, Any]] = []
+        self.r1_total_time_limit: int = 0
+        self.r1_start_time: float = 0
         self.timer_task: Optional[asyncio.Task] = None
         self.auto_advance_task: Optional[asyncio.Task] = None
         self.is_revealed: bool = False
@@ -189,9 +193,176 @@ class RoomManager:
         room.status = "IN_GAME"
         room.current_round_idx = 0
         room.current_question_idx = 0
-        await self.broadcast_next_question(room_code)
+        # Vòng 1 diễn ra theo tốc độ cá nhân bất đồng bộ (Asynchronous Pacing)
+        await self.start_round_1_async(room_code)
 
     start_match = start_game
+
+    async def start_round_1_async(self, room_code: str):
+        """Khởi động Vòng 1 Khởi Động: Chế độ cá nhân bất đồng bộ (Personal Pacing)"""
+        room = self.rooms.get(room_code)
+        if not room or not room.exam.rounds:
+            return
+
+        self._cancel_room_tasks(room)
+        room.status = "IN_GAME"
+        room.current_round_idx = 0
+        room.current_question_idx = 0
+        room.r1_finished_players = set()
+        room.round1_history.clear()
+
+        r1 = room.exam.rounds[0]
+        # Bóc tách câu hỏi an toàn (giấu đáp án và giải thích)
+        safe_questions = []
+        for q in r1.questions:
+            sq = q.model_dump()
+            sq.pop("correct_answer", None)
+            sq.pop("acceptable_keywords", None)
+            sq.pop("explanation", None)
+            sq.pop("step_by_step_explanation", None)
+            sq.pop("progressive_hints", None)
+            safe_questions.append(sq)
+
+        room.r1_safe_questions = safe_questions
+        # Tổng thời gian vòng 1 = tổng thời gian từng câu + 15 giây dự phòng
+        room.r1_total_time_limit = sum(q.time_limit_sec for q in r1.questions) + 15
+        room.r1_start_time = time.time()
+
+        for p in room.players.values():
+            p.last_answer = None
+
+        payload = {
+            "round_number": 1,
+            "round_name": r1.round_name,
+            "round_theme": r1.round_theme,
+            "questions": safe_questions,
+            "total_questions": len(safe_questions),
+            "total_time_limit": room.r1_total_time_limit,
+            "start_timestamp": room.r1_start_time,
+            "leaderboard": room.get_leaderboard(),
+        }
+        await self.broadcast_to_room(room_code, "ROUND_1_ASYNC_START", payload)
+
+        # Bộ đếm giờ tổng Vòng 1
+        room.timer_task = asyncio.create_task(
+            self._r1_timeout_watcher(room_code, room.r1_total_time_limit)
+        )
+
+    async def _r1_timeout_watcher(self, room_code: str, time_limit: int):
+        try:
+            await asyncio.sleep(time_limit)
+            room = self.rooms.get(room_code)
+            if not room or room.status != "IN_GAME" or room.current_round_idx != 0:
+                return
+            await self.finish_round_1(room_code)
+        except asyncio.CancelledError:
+            pass
+
+    async def handle_r1_submit_question(
+        self,
+        room_code: str,
+        player_id: str,
+        question_id: str,
+        question_index: int,
+        user_answer: str,
+        time_taken_sec: float,
+    ) -> Dict[str, Any]:
+        """Ghi nhận đáp án câu hỏi Vòng 1 của từng người chơi theo chế độ thi mù"""
+        room = self.rooms.get(room_code)
+        if not room or room.status != "IN_GAME":
+            return {}
+
+        player = room.players.get(player_id)
+        if not player:
+            return {}
+
+        r1 = room.exam.rounds[0]
+        # Tìm câu hỏi tương ứng
+        target_q = None
+        for q in r1.questions:
+            if q.question_id == question_id:
+                target_q = q
+                break
+        if not target_q and 0 <= question_index < len(r1.questions):
+            target_q = r1.questions[question_index]
+
+        if not target_q:
+            return {}
+
+        sub = AnswerSubmission(
+            session_id=room_code,
+            round_number=1,
+            question_id=target_q.question_id,
+            user_answer=user_answer,
+            time_taken_sec=time_taken_sec,
+            star_of_hope_activated=False,
+            is_practice=False,
+        )
+
+        feedback = PracticeAndArenaEngine.evaluate_answer(
+            submission=sub,
+            question=target_q,
+            current_total_score=player.total_score,
+            current_streak=player.current_streak,
+            match_mode="ARENA_COMPETITION",
+        )
+
+        player.total_score = feedback.current_total_score
+        player.current_streak = feedback.current_streak
+        if player.current_streak > player.max_streak:
+            player.max_streak = player.current_streak
+
+        if target_q.question_id not in room.round1_history:
+            room.round1_history[target_q.question_id] = {}
+
+        room.round1_history[target_q.question_id][player_id] = {
+            "user_answer": user_answer,
+            "is_correct": feedback.is_correct,
+            "delta_score": feedback.total_delta_score,
+            "time_expired": feedback.time_expired,
+            "time_taken_sec": time_taken_sec,
+        }
+
+        # Phát sóng tiến độ cho cả phòng (không tiết lộ đúng/sai)
+        await self.broadcast_to_room(room_code, "R1_PLAYER_PROGRESS", {
+            "player_id": player_id,
+            "nickname": player.nickname,
+            "question_index": question_index + 1,
+            "total_questions": len(r1.questions),
+        })
+
+        return {"status": "ok", "recorded": True}
+
+    async def handle_r1_player_finished(self, room_code: str, player_id: str):
+        """Khi một người chơi hoàn thành tất cả câu hỏi của Vòng 1"""
+        room = self.rooms.get(room_code)
+        if not room or room.status != "IN_GAME" or room.current_round_idx != 0:
+            return
+
+        room.r1_finished_players.add(player_id)
+        player = room.players.get(player_id)
+        nickname = player.nickname if player else "Đấu thủ"
+
+        await self.broadcast_to_room(room_code, "R1_PLAYER_COMPLETED", {
+            "player_id": player_id,
+            "nickname": nickname,
+            "finished_count": len(room.r1_finished_players),
+            "total_players": sum(1 for p in room.players.values() if p.is_connected),
+        })
+
+        connected_ids = {p_id for p_id, p in room.players.items() if p.is_connected}
+        if connected_ids and connected_ids.issubset(room.r1_finished_players):
+            await self.finish_round_1(room_code)
+
+    async def finish_round_1(self, room_code: str):
+        """Kết thúc Vòng 1 và mở Bảng đối chiếu kết quả 5 cột cho toàn phòng"""
+        room = self.rooms.get(room_code)
+        if not room or room.status != "IN_GAME":
+            return
+
+        self._cancel_room_tasks(room)
+        room.status = "ROUND_1_SUMMARY"
+        await self.broadcast_round_1_summary(room_code)
 
     def _cancel_room_tasks(self, room: MultiplayerRoom):
         if room.timer_task and not room.timer_task.done():

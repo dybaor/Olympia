@@ -679,6 +679,50 @@
 
         <div id="optionsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2"></div>
 
+        <!-- THANH ĐIỀU KHIỂN CHỌN & CHỐT ĐÁP ÁN -->
+        <div id="answerActionBar" class="hidden mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 rounded-xl bg-arena-900/90 border border-slate-700/80 shadow-lg">
+          <div class="flex items-center space-x-2 text-xs">
+            <span class="text-slate-400 font-medium">Đang chọn:</span>
+            <span id="selectedOptionLabel" class="font-bold text-cyan-300 font-mono text-xs md:text-sm truncate max-w-[280px] md:max-w-md">(Chưa chọn)</span>
+            <span class="text-[11px] text-slate-500 italic hidden sm:inline">(Có thể đổi phương án trước khi chốt)</span>
+          </div>
+          <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
+            <!-- Nút Chốt đáp án cho Vòng 2, 3, 4 & Luyện tập -->
+            <button id="btnConfirmAnswer" onclick="confirmSelectedAnswer()" class="hidden px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs shadow-lg shadow-cyan-900/30 flex items-center space-x-2 transition transform active:scale-95">
+              <i class="fa-solid fa-check-circle"></i>
+              <span>CHỐT ĐÁP ÁN</span>
+            </button>
+            <!-- Nút Nộp & Câu tiếp theo cho Vòng 1 (Solo & Multiplayer) -->
+            <button id="btnR1NextQuestion" onclick="submitR1CurrentQuestion()" class="hidden px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-lg shadow-emerald-900/30 flex items-center space-x-2 transition transform active:scale-95">
+              <span>NỘP & CÂU TIẾP THEO</span>
+              <i class="fa-solid fa-arrow-right"></i>
+            </button>
+          </div>
+        </div>
+        
+        <!-- TRẠNG THÁI ĐÃ CHỐT ĐÁP ÁN (MULTIPLAYER) -->
+        <div id="answerLockedStatus" class="hidden mt-4 p-3 rounded-xl bg-blue-950/40 border border-blue-500/40 text-center">
+          <p class="text-xs font-semibold text-blue-300 flex items-center justify-center gap-2">
+            <i class="fa-solid fa-lock text-cyan-400"></i>
+            <span>Đã chốt đáp án! Đang chờ các đối thủ khác hoàn tất...</span>
+          </p>
+        </div>
+
+        <!-- MÀN HÌNH CHỜ VÒNG 1 KHI HOÀN THÀNH TRƯỚC (MULTIPLAYER) -->
+        <div id="r1WaitingCard" class="hidden mt-6 p-6 rounded-2xl bg-gradient-to-br from-slate-900/90 to-blue-950/80 border border-cyan-500/40 text-center space-y-4">
+          <div class="w-16 h-16 mx-auto rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-3xl">
+            <i class="fa-solid fa-flag-checkered"></i>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold text-white">Bạn đã hoàn thành Vòng 1 Khởi Động!</h3>
+            <p class="text-xs text-slate-300 mt-1">Hệ thống đang chờ các đấu thủ khác hoàn tất bài thi hoặc hết giờ vòng đấu...</p>
+          </div>
+          <div class="inline-flex items-center space-x-2 px-3 py-1.5 rounded-full bg-arena-900/80 border border-slate-700 text-xs text-cyan-400 font-mono">
+            <i class="fa-solid fa-circle-notch fa-spin text-cyan-400"></i>
+            <span id="r1WaitingStatusText">Đang chờ đồng bộ Bảng tổng kết...</span>
+          </div>
+        </div>
+
         <!-- FEEDBACK CARD (Hiện sau khi trả lời) -->
         <div id="feedbackBox" class="hidden mt-6 p-5 rounded-xl border space-y-3 transition-all">
           <div class="flex items-center justify-between">
@@ -1041,6 +1085,13 @@
       r1SummaryInterval: null,
       selectedFiles: [],
       mpReconnectAttempts: 0,
+      selectedOption: null,
+      isAnswerSubmitted: false,
+      r1Questions: [],
+      r1CurrentIndex: 0,
+      r1TotalTime: 120,
+      r1StartTime: 0,
+      mpCurrentRoundNumber: 1,
     };
 
     // QUẢN LÝ TẢI LÊN NHIỀU FILE (MULTI-FILE UPLOAD) & KÉO THẢ
@@ -1474,11 +1525,16 @@
       clearInterval(appState.timerInterval);
       appState.starOfHopeActivated = false;
       appState.hintsUsedThisQuestion = 0;
+      appState.selectedOption = null;
+      appState.isAnswerSubmitted = false;
 
-      // Ẩn hộp gợi ý, feedback và modal tổng kết
+      // Ẩn hộp gợi ý, feedback, thanh chốt và modal tổng kết
       document.getElementById('hintDisplayBox').classList.add('hidden');
       document.getElementById('feedbackBox').classList.add('hidden');
       document.getElementById('round1SummaryModal').classList.add('hidden');
+      document.getElementById('answerActionBar')?.classList.add('hidden');
+      document.getElementById('answerLockedStatus')?.classList.add('hidden');
+      document.getElementById('r1WaitingCard')?.classList.add('hidden');
 
       const round = appState.rounds[appState.currentRoundIndex];
       const question = round.questions[appState.currentQuestionIndex];
@@ -1533,8 +1589,8 @@
         const letters = ['A', 'B', 'C', 'D'];
         question.options.forEach((opt, idx) => {
           const btn = document.createElement('button');
-          btn.className = 'w-full text-left p-4 rounded-xl bg-arena-700/60 hover:bg-arena-700 border border-slate-700 hover:border-cyan-500 transition duration-150 flex items-start space-x-3 group';
-          btn.onclick = () => submitUserAnswer(opt);
+          btn.className = 'w-full text-left p-4 rounded-xl bg-arena-700/60 hover:bg-arena-700 border border-slate-700 hover:border-cyan-500 transition duration-150 flex items-start space-x-3 group cursor-pointer';
+          btn.onclick = () => selectAnswerOption(opt, idx);
           btn.innerHTML = `
             <span class="w-6 h-6 rounded-lg bg-arena-900 text-cyan-400 font-bold flex items-center justify-center text-xs group-hover:bg-cyan-500 group-hover:text-black transition">
               ${letters[idx] || idx+1}
@@ -1554,6 +1610,102 @@
         }
       } else {
         startTimer(question.time_limit_sec || 20);
+      }
+    }
+
+    // CHỌN PHƯƠNG ÁN (CHO PHÉP THAY ĐỔI TÙY Ý TRƯỚC KHI CHỐT HOẶC HẾT GIỜ)
+    function selectAnswerOption(optText, optIdx) {
+      if (appState.isAnswerSubmitted) return;
+      appState.selectedOption = optText;
+
+      const bar = document.getElementById('answerActionBar');
+      const label = document.getElementById('selectedOptionLabel');
+      const btnConfirm = document.getElementById('btnConfirmAnswer');
+      const btnR1Next = document.getElementById('btnR1NextQuestion');
+
+      if (bar) bar.classList.remove('hidden');
+      if (label) {
+        const letters = ['A', 'B', 'C', 'D'];
+        label.innerText = `[${letters[optIdx] || optIdx+1}] ${optText}`;
+      }
+
+      const isR1 = (
+        (appState.matchMode === 'MULTIPLAYER_ARENA' && appState.mpCurrentRoundNumber === 1) ||
+        (appState.matchMode === 'ARENA_COMPETITION' && appState.rounds[appState.currentRoundIndex]?.round_number === 1)
+      );
+
+      if (isR1) {
+        if (btnR1Next) btnR1Next.classList.remove('hidden');
+        if (btnConfirm) btnConfirm.classList.add('hidden');
+      } else {
+        if (btnConfirm) btnConfirm.classList.remove('hidden');
+        if (btnR1Next) btnR1Next.classList.add('hidden');
+      }
+
+      // Tô màu nổi bật lựa chọn đang chọn (giữ nguyên khả năng click phương án khác)
+      const btns = document.querySelectorAll('#optionsContainer button');
+      btns.forEach((b, bIdx) => {
+        if (bIdx === optIdx) {
+          b.className = 'w-full text-left p-4 rounded-xl bg-cyan-950/80 border-2 border-cyan-400 text-cyan-100 flex items-start space-x-3 shadow-lg shadow-cyan-950/50 ring-2 ring-cyan-400/40 transition duration-150';
+          const badge = b.querySelector('span:first-child');
+          if (badge) badge.className = 'w-6 h-6 rounded-lg bg-cyan-500 text-black font-black flex items-center justify-center text-xs';
+        } else {
+          b.className = 'w-full text-left p-4 rounded-xl bg-arena-700/60 hover:bg-arena-700 border border-slate-700 hover:border-cyan-500 transition duration-150 flex items-start space-x-3 group opacity-75 hover:opacity-100';
+          const badge = b.querySelector('span:first-child');
+          if (badge) badge.className = 'w-6 h-6 rounded-lg bg-arena-900 text-cyan-400 font-bold flex items-center justify-center text-xs group-hover:bg-cyan-500 group-hover:text-black transition';
+        }
+      });
+    }
+
+    // CHỐT ĐÁP ÁN (VÒNG 2, 3, 4 & LUYỆN TẬP)
+    function confirmSelectedAnswer() {
+      if (appState.isAnswerSubmitted) return;
+      if (!appState.selectedOption) {
+        alert('Vui lòng chọn một phương án A, B, C hoặc D trước khi chốt!');
+        return;
+      }
+      appState.isAnswerSubmitted = true;
+      document.getElementById('answerActionBar')?.classList.add('hidden');
+
+      if (appState.matchMode === 'MULTIPLAYER_ARENA') {
+        document.getElementById('answerLockedStatus')?.classList.remove('hidden');
+      }
+
+      const btns = document.querySelectorAll('#optionsContainer button');
+      btns.forEach(b => {
+        b.disabled = true;
+        b.classList.add('cursor-not-allowed');
+      });
+
+      submitUserAnswer(appState.selectedOption);
+    }
+
+    // NỘP & CÂU TIẾP THEO CHO VÒNG 1 (CÁ NHÂN & MULTIPLAYER)
+    function submitR1CurrentQuestion() {
+      if (!appState.selectedOption) {
+        alert('Vui lòng chọn một phương án A, B, C hoặc D trước khi nộp câu này!');
+        return;
+      }
+      const chosen = appState.selectedOption;
+      appState.selectedOption = null;
+      document.getElementById('answerActionBar')?.classList.add('hidden');
+
+      if (appState.matchMode === 'MULTIPLAYER_ARENA') {
+        const currentQ = appState.r1Questions[appState.r1CurrentIndex];
+        if (appState.mpSocket && appState.mpSocket.readyState === WebSocket.OPEN && currentQ) {
+          appState.mpSocket.send(JSON.stringify({
+            action: 'R1_SUBMIT_QUESTION',
+            question_id: currentQ.question_id,
+            question_index: appState.r1CurrentIndex,
+            answer: chosen,
+            time_taken: 5.0
+          }));
+        }
+        appState.r1CurrentIndex++;
+        renderMultiplayerR1CurrentQuestion();
+      } else {
+        // Solo Vòng 1
+        submitUserAnswer(chosen);
       }
     }
 
@@ -1614,8 +1766,10 @@
             btn.classList.add('opacity-50', 'cursor-not-allowed');
           });
 
-          // Tự động nộp bài hết giờ
-          submitUserAnswer('(Hết thời gian)');
+          // Tự động nộp bài hết giờ (nếu đã chọn thì chốt phương án đó, chưa chọn thì nộp Hết thời gian)
+          document.getElementById('answerActionBar')?.classList.add('hidden');
+          appState.isAnswerSubmitted = true;
+          submitUserAnswer(appState.selectedOption || '(Hết thời gian)');
         }
       }, 1000);
     }
@@ -2396,6 +2550,24 @@
           if (data.leaderboard) renderMultiplayerLeaderboard(data.leaderboard);
           break;
 
+        case 'ROUND_1_ASYNC_START':
+          renderMultiplayerR1Start(data);
+          break;
+
+        case 'R1_PLAYER_PROGRESS':
+          if (data.nickname) {
+            const el = document.getElementById('mpSubmissionStatus');
+            if (el) el.innerText = `${data.nickname} đang ở câu ${data.question_index}/${data.total_questions}`;
+          }
+          break;
+
+        case 'R1_PLAYER_COMPLETED':
+          if (data.nickname) {
+            const el = document.getElementById('r1WaitingStatusText');
+            if (el) el.innerText = `${data.nickname} đã hoàn thành (${data.finished_count}/${data.total_players} đấu thủ xong)`;
+          }
+          break;
+
         case 'QUESTION_START':
         case 'QUESTION_RESUME':
           renderMultiplayerQuestion(data);
@@ -2468,11 +2640,17 @@
       `).join('');
     }
 
-    function renderMultiplayerQuestion(data) {
+    function renderMultiplayerR1Start(data) {
       clearInterval(appState.timerInterval);
-      appState.starOfHopeActivated = false;
+      clearAutoAdvance();
+      appState.selectedOption = null;
+      appState.isAnswerSubmitted = false;
+      appState.mpCurrentRoundNumber = 1;
+      appState.r1Questions = data.questions || [];
+      appState.r1CurrentIndex = 0;
+      appState.r1TotalTime = data.total_time_limit || 120;
+      appState.r1StartTime = Date.now();
 
-      // Ẩn sảnh chờ và modal tổng kết V1, hiện màn hình thi đấu
       document.getElementById('multiplayerLobbyScreen').classList.add('hidden');
       document.getElementById('round1SummaryModal').classList.add('hidden');
       clearInterval(appState.r1SummaryInterval);
@@ -2481,6 +2659,94 @@
       document.getElementById('mpMiniLeaderboard').classList.remove('hidden');
       document.getElementById('feedbackBox').classList.add('hidden');
       document.getElementById('practiceToolbar').classList.add('hidden');
+      document.getElementById('answerLockedStatus')?.classList.add('hidden');
+      document.getElementById('answerActionBar')?.classList.add('hidden');
+
+      if (data.leaderboard) renderMultiplayerLeaderboard(data.leaderboard);
+
+      // Bắt đầu đếm ngược tổng thời gian Vòng 1
+      startTimer(appState.r1TotalTime);
+
+      renderMultiplayerR1CurrentQuestion();
+    }
+
+    function renderMultiplayerR1CurrentQuestion() {
+      clearAutoAdvance();
+      appState.selectedOption = null;
+      appState.isAnswerSubmitted = false;
+      document.getElementById('answerActionBar')?.classList.add('hidden');
+      document.getElementById('answerLockedStatus')?.classList.add('hidden');
+      document.getElementById('feedbackBox')?.classList.add('hidden');
+
+      if (appState.r1CurrentIndex >= appState.r1Questions.length) {
+        // Người chơi đã hoàn tất tất cả câu hỏi của Vòng 1!
+        document.getElementById('optionsContainer').innerHTML = '';
+        document.getElementById('questionPrompt').innerText = '';
+        document.getElementById('r1WaitingCard')?.classList.remove('hidden');
+        document.getElementById('answerActionBar')?.classList.add('hidden');
+
+        if (appState.mpSocket && appState.mpSocket.readyState === WebSocket.OPEN) {
+          appState.mpSocket.send(JSON.stringify({
+            action: 'R1_PLAYER_FINISHED'
+          }));
+        }
+        return;
+      }
+
+      document.getElementById('r1WaitingCard')?.classList.add('hidden');
+      const q = appState.r1Questions[appState.r1CurrentIndex];
+      appState.mpCurrentSafeQuestion = q;
+
+      document.getElementById('hudRoundName').innerText = 'Vòng 1: Khởi Động (Độc lập)';
+      document.getElementById('roundBadge').innerText = 'VÒNG 1';
+      document.getElementById('roundBadge').className = 'px-2.5 py-1 text-xs font-bold rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 uppercase';
+      document.getElementById('roundTitle').innerText = 'Khởi Động - Tốc độ cá nhân';
+      document.getElementById('roundTheme').innerText = 'Làm bài độc lập & nộp chuyển câu tức thì';
+      document.getElementById('currentQuestionNum').innerText = appState.r1CurrentIndex + 1;
+      document.getElementById('totalRoundQuestions').innerText = appState.r1Questions.length;
+      document.getElementById('dimensionBadge').innerText = q.knowledge_dimension || 'Khởi động nhanh';
+      document.getElementById('bloomBadge').innerText = `Bloom: ${q.bloom_level || 'REMEMBER'}`;
+      document.getElementById('baseScoreTag').innerText = `+${q.base_score || 10} điểm`;
+      document.getElementById('questionPrompt').innerText = q.prompt;
+
+      const optContainer = document.getElementById('optionsContainer');
+      optContainer.innerHTML = '';
+      if (q.options && q.options.length > 0) {
+        const letters = ['A', 'B', 'C', 'D'];
+        q.options.forEach((opt, idx) => {
+          const btn = document.createElement('button');
+          btn.className = 'w-full text-left p-4 rounded-xl bg-arena-700/60 hover:bg-arena-700 border border-slate-700 hover:border-purple-400 transition duration-150 flex items-start space-x-3 group cursor-pointer';
+          btn.onclick = () => selectAnswerOption(opt, idx);
+          btn.innerHTML = `
+            <span class="w-6 h-6 rounded-lg bg-arena-900 text-purple-400 font-bold flex items-center justify-center text-xs group-hover:bg-purple-500 group-hover:text-black transition">
+              ${letters[idx] || idx+1}
+            </span>
+            <span class="text-xs md:text-sm text-slate-200 leading-snug">${opt}</span>
+          `;
+          optContainer.appendChild(btn);
+        });
+      }
+    }
+
+    function renderMultiplayerQuestion(data) {
+      clearInterval(appState.timerInterval);
+      appState.starOfHopeActivated = false;
+      appState.selectedOption = null;
+      appState.isAnswerSubmitted = false;
+      appState.mpCurrentRoundNumber = data.round_number;
+
+      // Ẩn sảnh chờ, modal tổng kết V1 và thanh chốt, hiện màn hình thi đấu
+      document.getElementById('multiplayerLobbyScreen').classList.add('hidden');
+      document.getElementById('round1SummaryModal').classList.add('hidden');
+      clearInterval(appState.r1SummaryInterval);
+      document.getElementById('stageScreen').classList.remove('hidden');
+      document.getElementById('liveHUD').classList.remove('hidden');
+      document.getElementById('mpMiniLeaderboard').classList.remove('hidden');
+      document.getElementById('feedbackBox').classList.add('hidden');
+      document.getElementById('practiceToolbar').classList.add('hidden');
+      document.getElementById('answerActionBar')?.classList.add('hidden');
+      document.getElementById('answerLockedStatus')?.classList.add('hidden');
+      document.getElementById('r1WaitingCard')?.classList.add('hidden');
 
       const q = data.question;
       appState.mpCurrentSafeQuestion = q;
@@ -2515,8 +2781,8 @@
         const letters = ['A', 'B', 'C', 'D'];
         q.options.forEach((opt, idx) => {
           const btn = document.createElement('button');
-          btn.className = 'w-full text-left p-4 rounded-xl bg-arena-700/60 hover:bg-arena-700 border border-slate-700 hover:border-purple-400 transition duration-150 flex items-start space-x-3 group';
-          btn.onclick = () => submitUserAnswer(opt);
+          btn.className = 'w-full text-left p-4 rounded-xl bg-arena-700/60 hover:bg-arena-700 border border-slate-700 hover:border-purple-400 transition duration-150 flex items-start space-x-3 group cursor-pointer';
+          btn.onclick = () => selectAnswerOption(opt, idx);
           btn.innerHTML = `
             <span class="w-6 h-6 rounded-lg bg-arena-900 text-purple-400 font-bold flex items-center justify-center text-xs group-hover:bg-purple-500 group-hover:text-black transition">
               ${letters[idx] || idx+1}
@@ -2540,6 +2806,8 @@
 
     function renderMultiplayerQuestionResult(data) {
       clearInterval(appState.timerInterval);
+      document.getElementById('answerLockedStatus')?.classList.add('hidden');
+      document.getElementById('answerActionBar')?.classList.add('hidden');
 
       if (data.is_blind) {
         // VÒNG 1: THI MÙ - KHÔNG LỘ ĐÁP ÁN ĐÚNG/SAI
@@ -2727,6 +2995,36 @@
         </li>
       `).join('');
     }
+
+    // Phím tắt bàn phím tiện lợi (A, B, C, D hoặc 1, 2, 3, 4 và Enter)
+    window.addEventListener('keydown', (e) => {
+      // Không bắt phím nếu đang gõ trong input text
+      if (['INPUT', 'TEXTAREA'].includes(document.target?.tagName || '')) return;
+
+      const key = e.key.toUpperCase();
+      const optButtons = document.querySelectorAll('#optionsContainer button');
+      if (optButtons.length >= 4 && !appState.isAnswerSubmitted) {
+        if (key === 'A' || key === '1') optButtons[0]?.click();
+        else if (key === 'B' || key === '2') optButtons[1]?.click();
+        else if (key === 'C' || key === '3') optButtons[2]?.click();
+        else if (key === 'D' || key === '4') optButtons[3]?.click();
+      }
+
+      if (e.key === 'Enter') {
+        const btnR1Next = document.getElementById('btnR1NextQuestion');
+        if (btnR1Next && !btnR1Next.classList.contains('hidden')) {
+          e.preventDefault();
+          btnR1Next.click();
+          return;
+        }
+        const btnConfirm = document.getElementById('btnConfirmAnswer');
+        if (btnConfirm && !btnConfirm.classList.contains('hidden')) {
+          e.preventDefault();
+          btnConfirm.click();
+          return;
+        }
+      }
+    });
 
     // Tự động kiểm tra URL Hash (#join=OLY-XXX) khi người chơi mở link mời
     window.addEventListener('load', () => {

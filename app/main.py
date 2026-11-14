@@ -47,7 +47,13 @@ app.include_router(docs_router)
 app.include_router(game_router)
 app.include_router(multiplayer_router)
 
+_CACHED_INDEX_HTML: str | None = None
+
 def find_index_html() -> str | None:
+    global _CACHED_INDEX_HTML
+    if _CACHED_INDEX_HTML:
+        return _CACHED_INDEX_HTML
+
     search_paths = [
         templates_dir / "index.html",
         BUNDLE_DIR / "app" / "templates" / "index.html",
@@ -63,6 +69,7 @@ def find_index_html() -> str | None:
             if p.exists() and p.is_file():
                 content = p.read_text(encoding="utf-8")
                 if content:
+                    _CACHED_INDEX_HTML = content
                     return content
         except Exception:
             pass
@@ -72,7 +79,10 @@ def find_index_html() -> str | None:
         for p in Path.cwd().rglob("index.html"):
             if "templates" in str(p) and p.is_file():
                 try:
-                    return p.read_text(encoding="utf-8")
+                    content = p.read_text(encoding="utf-8")
+                    if content:
+                        _CACHED_INDEX_HTML = content
+                        return content
                 except Exception:
                     pass
     except Exception:
@@ -82,32 +92,64 @@ def find_index_html() -> str | None:
 
 @app.get("/", response_class=HTMLResponse)
 def serve_home(request: Request):
-    html_content = find_index_html()
-    if html_content:
-        return HTMLResponse(content=html_content)
+    try:
+        html_content = find_index_html()
+        if html_content:
+            return HTMLResponse(content=html_content, status_code=200)
+    except Exception as exc:
+        pass
+
     fallback_html = """<!DOCTYPE html>
     <html lang="vi">
     <head><meta charset="utf-8"><title>Đấu Trường Tri Thức</title></head>
     <body style="background:#0f172a; color:#f8fafc; font-family:sans-serif; text-align:center; padding-top:50px;">
-        <h2>⚠️ Không tìm thấy giao diện index.html</h2>
-        <p>Vui lòng đảm bảo thư mục <code>app/templates/index.html</code> hoặc <code>_internal/app/templates/index.html</code> tồn tại.</p>
-        <button onclick="location.reload()" style="padding:10px 20px; font-weight:bold; cursor:pointer;">Tải lại trang</button>
+        <h2>🏛️ Đấu Trường Tri Thức - Olympic Arena</h2>
+        <p>Hệ thống máy chủ đã sẵn sàng. Vui lòng tải lại trang hoặc kiểm tra file giao diện <code>index.html</code>.</p>
+        <button onclick="location.reload()" style="padding:10px 20px; font-weight:bold; cursor:pointer; background:#0284c7; color:#fff; border:none; border-radius:6px;">Tải lại trang</button>
     </body>
     </html>"""
     return HTMLResponse(content=fallback_html, status_code=200)
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Bắt mọi ngoại lệ chưa xử lý, tránh trả về trang lỗi Internal Server Error trần"""
+    if "text/html" in request.headers.get("accept", ""):
+        html_content = find_index_html()
+        if html_content:
+            return HTMLResponse(content=html_content, status_code=200)
+        return HTMLResponse(
+            content=f"<h3>Đấu Trường Tri Thức</h3><p>Hệ thống đang hoạt động. Vui lòng tải lại trang.</p><pre>{str(exc)}</pre>",
+            status_code=200
+        )
+    return JSONResponse(
+        status_code=500,
+        content={"error": "Internal Error", "detail": str(exc)}
+    )
 
 @app.post("/heartbeat")
 @app.get("/heartbeat")
 def heartbeat():
     return {"status": "alive"}
 
-@app.websocket("/ws/{client_id}")
-async def generic_ws_client(websocket: WebSocket, client_id: str):
+@app.websocket("/ws")
+@app.websocket("/ws/{full_path:path}")
+async def universal_ws_endpoint(websocket: WebSocket, full_path: str = ""):
     """
-    WebSocket endpoint chung phục vụ kết nối kiểm tra, IDE livereload, hoặc preview sync.
-    Chấp nhận mọi kết nối hợp lệ, ngăn chặn hoàn toàn lỗi 403 Forbidden.
+    WebSocket endpoint toàn năng (Universal WebSocket Catch-all):
+    - Tự động nhận diện kết nối thi đấu Multiplayer: /ws/{room_code}/{player_id}
+    - Chấp nhận mọi kết nối WebSocket khác: /ws/{client_id}, /ws, kiểm tra preview, livereload...
+    - Ngăn chặn 100% lỗi 403 Forbidden khi kết nối từ mọi nguồn hợp lệ.
     """
+    parts = [p for p in full_path.strip("/").split("/") if p]
+    if len(parts) == 2 and (parts[0].startswith("OLY-") or len(parts[0]) == 7):
+        # Đường dẫn thi đấu Multiplayer: /ws/{room_code}/{player_id}
+        from app.api.routes_multiplayer import websocket_multiplayer_endpoint
+        await websocket_multiplayer_endpoint(websocket, parts[0], parts[1])
+        return
+
+    # Kết nối WebSocket chung / client preview / livereload
     await websocket.accept()
+    client_id = parts[0] if parts else "client"
     try:
         await websocket.send_json({"type": "CONNECTED", "client_id": client_id, "status": "ok"})
         while True:
@@ -126,12 +168,6 @@ async def generic_ws_client(websocket: WebSocket, client_id: str):
         pass
     except Exception:
         pass
-
-@app.websocket("/ws/{room_code}/{player_id}")
-async def root_multiplayer_ws_alias(websocket: WebSocket, room_code: str, player_id: str):
-    """Alias cho Multiplayer WebSocket tại root đường dẫn /ws/{room_code}/{player_id}"""
-    from app.api.routes_multiplayer import websocket_multiplayer_endpoint
-    await websocket_multiplayer_endpoint(websocket, room_code, player_id)
 
 @app.get("/health")
 def health_check():

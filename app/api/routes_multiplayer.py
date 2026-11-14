@@ -129,26 +129,43 @@ async def websocket_multiplayer_endpoint(websocket: WebSocket, room_code: str, p
 
     # Nếu vào phòng khi trận đấu đang diễn ra -> gửi trạng thái câu hỏi hiện tại ngay
     if room.status == "IN_GAME":
-        current_q = room.get_current_question()
-        if current_q:
-            safe_q = current_q.model_dump()
-            safe_q.pop("correct_answer", None)
-            safe_q.pop("explanation", None)
-            current_round = room.exam.rounds[room.current_round_idx]
+        if room.current_round_idx == 0:
+            # Vòng 1: Gửi toàn bộ câu hỏi an toàn để người chơi tiếp tục làm bài
             await websocket.send_text(json.dumps({
-                "type": "QUESTION_RESUME",
+                "type": "ROUND_1_ASYNC_START",
                 "room_code": code,
                 "data": {
-                    "round_number": current_round.round_number,
-                    "round_name": current_round.round_name,
-                    "question_index": room.current_question_idx + 1,
-                    "total_questions_in_round": len(current_round.questions),
-                    "question": safe_q,
-                    "time_limit_sec": room.question_time_limit,
-                    "elapsed_sec": max(0, int(time.time() - room.question_start_time)),
+                    "round_number": 1,
+                    "round_name": room.exam.rounds[0].round_name,
+                    "round_theme": room.exam.rounds[0].round_theme,
+                    "questions": room.r1_safe_questions,
+                    "total_questions": len(room.r1_safe_questions),
+                    "total_time_limit": room.r1_total_time_limit,
+                    "start_timestamp": room.r1_start_time,
                     "leaderboard": room.get_leaderboard(),
                 }
             }, ensure_ascii=False))
+        else:
+            current_q = room.get_current_question()
+            if current_q:
+                safe_q = current_q.model_dump()
+                safe_q.pop("correct_answer", None)
+                safe_q.pop("explanation", None)
+                current_round = room.exam.rounds[room.current_round_idx]
+                await websocket.send_text(json.dumps({
+                    "type": "QUESTION_RESUME",
+                    "room_code": code,
+                    "data": {
+                        "round_number": current_round.round_number,
+                        "round_name": current_round.round_name,
+                        "question_index": room.current_question_idx + 1,
+                        "total_questions_in_round": len(current_round.questions),
+                        "question": safe_q,
+                        "time_limit_sec": room.question_time_limit,
+                        "elapsed_sec": max(0, int(time.time() - room.question_start_time)),
+                        "leaderboard": room.get_leaderboard(),
+                    }
+                }, ensure_ascii=False))
 
     try:
         while True:
@@ -158,6 +175,26 @@ async def websocket_multiplayer_endpoint(websocket: WebSocket, room_code: str, p
 
             if action == "START_GAME":
                 await multiplayer_manager.start_game(code, host_player_id=player_id)
+
+            elif action == "R1_SUBMIT_QUESTION":
+                q_id = msg.get("question_id", "")
+                q_idx = int(msg.get("question_index", 0))
+                ans = msg.get("answer", "")
+                time_taken = float(msg.get("time_taken", 5.0))
+                await multiplayer_manager.handle_r1_submit_question(
+                    room_code=code,
+                    player_id=player_id,
+                    question_id=q_id,
+                    question_index=q_idx,
+                    user_answer=ans,
+                    time_taken_sec=time_taken,
+                )
+
+            elif action == "R1_PLAYER_FINISHED":
+                await multiplayer_manager.handle_r1_player_finished(
+                    room_code=code,
+                    player_id=player_id,
+                )
 
             elif action == "SUBMIT_ANSWER":
                 ans = msg.get("answer", "")
