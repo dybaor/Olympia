@@ -550,17 +550,30 @@
       </div>
 
       <!-- PRACTICE DOJO TOOLBAR (Chỉ hiện khi ở chế độ Luyện tập) -->
-      <div id="practiceToolbar" class="hidden bg-cyan-950/30 border border-cyan-500/40 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3">
-        <div class="flex items-center space-x-2 text-cyan-300 text-xs font-medium">
-          <i class="fa-solid fa-graduation-cap text-cyan-400 text-sm"></i>
-          <span>Chế độ Luyện tập: Thử thách không áp lực thời gian, được phép xem 2 tầng gợi ý.</span>
+      <div id="practiceToolbar" class="hidden bg-cyan-950/40 border border-cyan-500/40 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-md">
+        <!-- Bộ chọn chủ đề ôn tập & Thứ tự làm bài -->
+        <div class="flex flex-wrap items-center gap-2.5">
+          <div class="flex items-center gap-1.5 text-xs text-cyan-300 font-semibold">
+            <i class="fa-solid fa-layer-group text-cyan-400"></i>
+            <span>Chủ đề:</span>
+          </div>
+          <select id="dojoTopicSelect" onchange="changeDojoTopic(this.value)" class="bg-arena-900 text-xs text-cyan-200 border border-cyan-600/60 rounded-lg px-2.5 py-1.5 max-w-[280px] sm:max-w-[340px] truncate focus:outline-none focus:border-cyan-400">
+            <option value="ALL">Toàn bộ chuyên đề</option>
+          </select>
+          <span id="dojoQuestionCountBadge" class="text-[11px] px-2 py-0.5 rounded-full bg-cyan-900/60 text-cyan-300 border border-cyan-500/30 font-mono">0 câu</span>
+          <div class="flex items-center rounded-lg bg-arena-900/80 p-0.5 border border-cyan-800/60 text-[11px]">
+            <button id="btnDojoOrderSeq" onclick="toggleDojoOrder('sequential')" class="px-2 py-1 rounded bg-cyan-600 text-white font-bold transition">Tuần tự</button>
+            <button id="btnDojoOrderRnd" onclick="toggleDojoOrder('random')" class="px-2 py-1 rounded text-cyan-300 hover:text-white transition">Ngẫu nhiên</button>
+          </div>
         </div>
+
+        <!-- Nút Gợi ý Cấp 1 & Cấp 2 -->
         <div class="flex items-center space-x-2">
           <button id="btnHint1" onclick="fetchHint(1)" class="px-3 py-1.5 rounded-lg bg-arena-800 hover:bg-cyan-900 text-cyan-300 border border-cyan-700/60 text-xs font-semibold flex items-center gap-1.5 transition">
-            <i class="fa-regular fa-lightbulb"></i> Gợi ý Cấp 1 (Tư duy)
+            <i class="fa-regular fa-lightbulb text-amber-400"></i> Gợi ý 1
           </button>
           <button id="btnHint2" onclick="fetchHint(2)" class="px-3 py-1.5 rounded-lg bg-arena-800 hover:bg-cyan-900 text-cyan-300 border border-cyan-700/60 text-xs font-semibold flex items-center gap-1.5 transition">
-            <i class="fa-solid fa-key"></i> Gợi ý Cấp 2 (Manh mối)
+            <i class="fa-solid fa-key text-cyan-400"></i> Gợi ý 2
           </button>
         </div>
       </div>
@@ -684,9 +697,16 @@
                 <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Luyện câu hỏi tương tự (Variant)
               </button>
             </div>
-            <button id="nextQuestionBtn" onclick="nextQuestion()" class="ml-auto bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-lg transition">
-              CÂU TIẾP THEO <i class="fa-solid fa-arrow-right ml-1"></i>
-            </button>
+            <div class="flex items-center gap-3 ml-auto">
+              <!-- Auto-Advance Ticker -->
+              <div id="autoAdvanceTicker" class="hidden text-xs text-amber-300 font-bold flex items-center gap-2 py-1.5 px-3 rounded-lg bg-amber-950/70 border border-amber-500/40 animate-pulse">
+                <i class="fa-solid fa-bolt text-amber-400"></i>
+                <span id="autoAdvanceText">Tự động chuyển câu sau 2.0s...</span>
+              </div>
+              <button id="nextQuestionBtn" onclick="nextQuestion()" class="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-lg transition">
+                CÂU TIẾP THEO <i class="fa-solid fa-arrow-right ml-1"></i>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -929,6 +949,9 @@
       mpQuestionTimeLimit: 20,
       mpQuestionStartTime: 0,
       mpCurrentSafeQuestion: null,
+      autoAdvanceInterval: null,
+      practiceOrder: 'sequential',
+      selectedTopic: 'ALL',
     };
 
     // UPLOAD TÀI LIỆU -> CHUYỂN SANG PHÒNG CẤU HÌNH (LOBBY)
@@ -1150,6 +1173,7 @@
           modeBadge.innerHTML = '<i class="fa-solid fa-graduation-cap text-cyan-400"></i><span>Luyện Tập Dojo</span>';
           streakBox.classList.add('hidden');
           document.getElementById('practiceToolbar').classList.remove('hidden');
+          loadDojoTopics(appState.docId);
         }
 
         renderCurrentQuestion();
@@ -1163,6 +1187,7 @@
 
     // RENDER CÂU HỎI
     function renderCurrentQuestion() {
+      clearAutoAdvance();
       clearInterval(appState.timerInterval);
       appState.starOfHopeActivated = false;
       appState.hintsUsedThisQuestion = 0;
@@ -1391,6 +1416,128 @@
       }
     }
 
+    // AUTO-ADVANCE VÀ CHỦ ĐỀ LUYỆN TẬP DOJO
+    function startAutoAdvance(seconds = 2.0) {
+      clearAutoAdvance();
+      const ticker = document.getElementById('autoAdvanceTicker');
+      const textEl = document.getElementById('autoAdvanceText');
+      if (!ticker || !textEl) return;
+      ticker.classList.remove('hidden');
+
+      let left = seconds;
+      textEl.innerText = `Tự động chuyển câu sau ${left.toFixed(1)}s...`;
+
+      appState.autoAdvanceInterval = setInterval(() => {
+        left -= 0.5;
+        if (left <= 0) {
+          clearAutoAdvance();
+          if (appState.matchMode !== 'MULTIPLAYER_ARENA') {
+            nextQuestion();
+          }
+        } else {
+          textEl.innerText = `Tự động chuyển câu sau ${left.toFixed(1)}s...`;
+        }
+      }, 500);
+    }
+
+    function clearAutoAdvance() {
+      if (appState.autoAdvanceInterval) {
+        clearInterval(appState.autoAdvanceInterval);
+        appState.autoAdvanceInterval = null;
+      }
+      const ticker = document.getElementById('autoAdvanceTicker');
+      if (ticker) ticker.classList.add('hidden');
+    }
+
+    async function loadDojoTopics(docId) {
+      if (!docId) return;
+      try {
+        const res = await fetch(`/api/game/topics?document_id=${docId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const select = document.getElementById('dojoTopicSelect');
+        if (!select) return;
+
+        select.innerHTML = `<option value="ALL">Toàn bộ chuyên đề (${data.total_questions} câu)</option>`;
+        (data.topics || []).forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t.topic_name;
+          opt.innerText = `${t.topic_name} (${t.question_count} câu)`;
+          select.appendChild(opt);
+        });
+
+        const countBadge = document.getElementById('dojoQuestionCountBadge');
+        if (countBadge) {
+          countBadge.innerText = `${data.total_questions} câu`;
+        }
+      } catch (err) {
+        console.error('Lỗi nạp topics dojo:', err);
+      }
+    }
+
+    async function changeDojoTopic(topicValue) {
+      appState.selectedTopic = topicValue;
+      clearAutoAdvance();
+
+      const countBadge = document.getElementById('dojoQuestionCountBadge');
+      if (countBadge) countBadge.innerText = 'Đang nạp...';
+
+      try {
+        const configPayload = {
+          match_mode: 'PRACTICE_DOJO',
+          practice_filter: 'ALL',
+          practice_order: appState.practiceOrder || 'sequential',
+          topic_filter: topicValue,
+          round_configs: [
+            { round_number: 1, difficulty: 'EASY', time_limit_sec: 0, question_count: 50 },
+            { round_number: 2, difficulty: 'MEDIUM', time_limit_sec: 0, question_count: 50 },
+            { round_number: 3, difficulty: 'HARD', time_limit_sec: 0, question_count: 50 },
+            { round_number: 4, difficulty: 'EXTREME', time_limit_sec: 0, question_count: 50 }
+          ]
+        };
+
+        const res = await fetch(`/api/game/setup-match?document_id=${appState.docId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(configPayload)
+        });
+
+        if (!res.ok) throw new Error('Không thể tải chuyên đề này');
+        const data = await res.json();
+
+        appState.sessionId = data.session_id;
+        appState.examId = data.exam_id;
+        appState.rounds = data.rounds;
+        appState.currentRoundIndex = 0;
+        appState.currentQuestionIndex = 0;
+
+        const totalQ = data.rounds.reduce((acc, r) => acc + (r.questions ? r.questions.length : 0), 0);
+        if (countBadge) countBadge.innerText = `${totalQ} câu`;
+
+        renderCurrentQuestion();
+      } catch (err) {
+        alert('Lỗi chuyển chuyên đề: ' + err.message);
+      }
+    }
+
+    function toggleDojoOrder(order) {
+      appState.practiceOrder = order;
+      const btnSeq = document.getElementById('btnDojoOrderSeq');
+      const btnRnd = document.getElementById('btnDojoOrderRnd');
+      if (!btnSeq || !btnRnd) return;
+
+      if (order === 'sequential') {
+        btnSeq.className = 'px-2 py-1 rounded bg-cyan-600 text-white font-bold transition';
+        btnRnd.className = 'px-2 py-1 rounded text-cyan-300 hover:text-white transition';
+      } else {
+        btnSeq.className = 'px-2 py-1 rounded text-cyan-300 hover:text-white transition';
+        btnRnd.className = 'px-2 py-1 rounded bg-cyan-600 text-white font-bold transition';
+      }
+      const select = document.getElementById('dojoTopicSelect');
+      const currentTopic = select ? select.value : 'ALL';
+      changeDojoTopic(currentTopic);
+    }
+
     function showFeedback(fb, userAns) {
       appState.totalScore = fb.current_total_score;
       appState.currentStreak = fb.current_streak;
@@ -1434,6 +1581,11 @@
       } else {
         practiceBtns.classList.add('hidden');
       }
+
+      // Tự động chuyển câu nếu hết thời gian ở chế độ Thi đấu Solo
+      if (appState.matchMode === 'ARENA_COMPETITION' && fb.time_expired) {
+        startAutoAdvance(2.0);
+      }
     }
 
     // LÀM LẠI CÂU HỎI
@@ -1459,6 +1611,7 @@
     }
 
     function nextQuestion() {
+      clearAutoAdvance();
       // Nếu là Multiplayer: Chỉ Host mới gửi lệnh NEXT_QUESTION
       if (appState.matchMode === 'MULTIPLAYER_ARENA') {
         if (appState.mpIsHost && appState.mpSocket && appState.mpSocket.readyState === WebSocket.OPEN) {
@@ -1907,6 +2060,7 @@
 
       if (data.leaderboard) renderMultiplayerLeaderboard(data.leaderboard);
       document.getElementById('mpSubmissionStatus').innerText = '0/0 đã nộp bài';
+      clearAutoAdvance();
 
       // Bắt đầu đếm ngược đồng bộ
       const timeLimit = data.time_limit_sec || 20;
@@ -1917,6 +2071,10 @@
 
     function renderMultiplayerQuestionResult(data) {
       clearInterval(appState.timerInterval);
+
+      if (data.auto_advance_seconds) {
+        startAutoAdvance(data.auto_advance_seconds);
+      }
 
       if (data.leaderboard) {
         renderMultiplayerLeaderboard(data.leaderboard);

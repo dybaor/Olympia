@@ -63,14 +63,16 @@ class DirectMDQuizParser:
         - correct_answer: Nhận diện phương án in đậm **...**, làm sạch dấu **.
         - explanation: Lấy nguyên văn nội dung sau 'Giải thích:'.
         """
-        # 1. Quét toàn bộ tiêu đề Phần / Chương (## PHẦN ... hoặc ## CHƯƠNG ...)
-        section_matches = list(re.finditer(r'^##\s+(.+)$', content, re.M))
+        # 1. Quét toàn bộ tiêu đề Phần / Chương phân cấp (## PHẦN ... hoặc ### ...)
+        section_matches = list(re.finditer(r'^(#{2,3})\s+(.+)$', content, re.M))
         sections = []
         for sm in section_matches:
-            sec_title = sm.group(1).strip()
+            level = len(sm.group(1))
+            sec_title = sm.group(2).strip()
             # Loại bỏ các ký tự markdown thừa
             sec_title = re.sub(r'^\*+|\*+$', '', sec_title).strip()
             sections.append({
+                "level": level,
                 "title": sec_title,
                 "start": sm.start()
             })
@@ -84,10 +86,11 @@ class DirectMDQuizParser:
 
         matches = list(q_header_regex.finditer(content))
         if not matches:
-            return [], []
+            return [], [], {}
 
         parsed_questions: List[OlympicQuestion] = []
         topics_found: set = set()
+        topic_counts: Dict[str, int] = {}
 
         for idx, m in enumerate(matches):
             q_num = int(m.group(1))
@@ -96,15 +99,30 @@ class DirectMDQuizParser:
             end_pos = matches[idx + 1].start() if idx + 1 < len(matches) else len(content)
             q_block = content[start_pos:end_pos].strip()
 
-            # Xác định Topic gần nhất phía trên câu hỏi
+            # Xác định Topic gần nhất phía trên câu hỏi (hỗ trợ phân cấp ## và ###)
             header_start_pos = m.start()
             current_topic = "Tổng quan kiến thức"
+            last_major = ""
+            last_sub = ""
             for s in sections:
                 if s["start"] <= header_start_pos:
-                    current_topic = s["title"]
+                    if s["level"] == 2:
+                        last_major = s["title"]
+                        last_sub = ""
+                    elif s["level"] == 3:
+                        last_sub = s["title"]
                 else:
                     break
+
+            if last_major and last_sub:
+                current_topic = f"{last_major} - {last_sub}"
+            elif last_major:
+                current_topic = last_major
+            elif last_sub:
+                current_topic = last_sub
+
             topics_found.add(current_topic)
+            topic_counts[current_topic] = topic_counts.get(current_topic, 0) + 1
 
             # Tách các dòng trong block của chính câu hỏi này
             block_lines = [l.strip() for l in q_block.splitlines() if l.strip()]
@@ -236,14 +254,15 @@ class DirectMDQuizParser:
 
         # Giữ thứ tự xuất hiện của các topic
         ordered_topics = []
-        for s in sections:
-            if s["title"] in topics_found and s["title"] not in ordered_topics:
-                ordered_topics.append(s["title"])
+        for q in parsed_questions:
+            top = q.source_citation.page_or_section
+            if top and top not in ordered_topics:
+                ordered_topics.append(top)
         for t in topics_found:
             if t not in ordered_topics:
                 ordered_topics.append(t)
 
-        return parsed_questions, ordered_topics
+        return parsed_questions, ordered_topics, topic_counts
 
     @classmethod
     def build_knowledge_bundle(cls, content: str, doc_id: str, doc_title: str) -> ExtractedKnowledgeBundle:
@@ -251,7 +270,12 @@ class DirectMDQuizParser:
         Nạp nhanh (Fast-Import) vào ExtractedKnowledgeBundle.
         TUYỆT ĐỐI KHÔNG tạo các CoreDefinition giả định để không bị luồng sinh khuôn mẫu gọi.
         """
-        questions, topics = cls.parse_document(content, doc_id, doc_title)
+        parse_res = cls.parse_document(content, doc_id, doc_title)
+        if len(parse_res) == 3:
+            questions, topics, topic_counts = parse_res
+        else:
+            questions, topics = parse_res
+            topic_counts = {}
 
         chunks = [
             ChunkMetadata(
@@ -280,6 +304,7 @@ class DirectMDQuizParser:
             is_direct_quiz=True,
             direct_quiz_questions_json=json.dumps([q.model_dump() for q in questions], ensure_ascii=False),
             direct_quiz_topics=topics,
+            topic_question_counts=topic_counts,
             total_direct_questions=len(questions)
         )
         return bundle
@@ -468,7 +493,7 @@ class DirectMDQuizParser:
                 questions=q_list
             ))
         else:
-            for i in range(0, min(len(q_list), 100), chunk_size):
+            for i in range(0, len(q_list), chunk_size):
                 sub_q = q_list[i:i+chunk_size]
                 r_num = (i // chunk_size) + 1
                 rounds.append(OlympicRoundSet(

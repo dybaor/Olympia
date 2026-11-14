@@ -62,4 +62,5 @@ class ExtractedKnowledgeBundle(BaseModel):
     is_direct_quiz: bool = False
     direct_quiz_questions_json: Optional[str] = None
     direct_quiz_topics: List[str] = Field(default_factory=list)
+    topic_question_counts: dict = Field(default_factory=dict)
     total_direct_questions: int = 0

@@ -59,6 +59,9 @@ class MultiplayerRoom:
         self.question_start_time: float = 0
         self.question_time_limit: int = 20
         self.answers_for_current_q: Dict[str, Dict[str, Any]] = {}
+        self.timer_task: Optional[asyncio.Task] = None
+        self.auto_advance_task: Optional[asyncio.Task] = None
+        self.is_revealed: bool = False
 
     def get_current_question(self) -> Optional[OlympicQuestion]:
         if self.current_round_idx < len(self.exam.rounds):
@@ -186,10 +189,23 @@ class RoomManager:
         room.current_question_idx = 0
         await self.broadcast_next_question(room_code)
 
+    start_match = start_game
+
+    def _cancel_room_tasks(self, room: MultiplayerRoom):
+        if room.timer_task and not room.timer_task.done():
+            room.timer_task.cancel()
+            room.timer_task = None
+        if room.auto_advance_task and not room.auto_advance_task.done():
+            room.auto_advance_task.cancel()
+            room.auto_advance_task = None
+
     async def broadcast_next_question(self, room_code: str):
         room = self.rooms.get(room_code)
         if not room:
             return
+
+        self._cancel_room_tasks(room)
+        room.is_revealed = False
 
         current_q = room.get_current_question()
         if not current_q:
@@ -234,6 +250,59 @@ class RoomManager:
         }
 
         await self.broadcast_to_room(room_code, "QUESTION_START", payload)
+
+        # Khởi động bộ đếm giờ tự động trên Server
+        round_idx = room.current_round_idx
+        q_idx = room.current_question_idx
+        t_limit = room.question_time_limit
+        room.timer_task = asyncio.create_task(
+            self._question_timeout_watcher(room_code, round_idx, q_idx, t_limit)
+        )
+
+    async def _question_timeout_watcher(self, room_code: str, round_idx: int, q_idx: int, time_limit: int):
+        """Watcher chạy ngầm trên Server: Hết giờ tự động nộp bài và công bố đáp án"""
+        try:
+            await asyncio.sleep(time_limit)
+            room = self.rooms.get(room_code)
+            if not room or room.status != "IN_GAME":
+                return
+            if room.current_round_idx != round_idx or room.current_question_idx != q_idx:
+                return
+            if room.is_revealed:
+                return
+
+            # Tự động nộp bài với kết quả time_expired cho tất cả người chơi chưa làm
+            for p_id, p in list(room.players.items()):
+                if p.is_connected and p_id not in room.answers_for_current_q:
+                    try:
+                        await self.handle_submit_answer(
+                            room_code=room_code,
+                            player_id=p_id,
+                            user_answer="",
+                            time_taken_sec=float(time_limit)
+                        )
+                    except Exception:
+                        pass
+
+            await self.reveal_question_results(room_code)
+        except asyncio.CancelledError:
+            pass
+
+    async def _auto_advance_after_delay(self, room_code: str, delay: float = 2.5):
+        """Tự động chuyển câu hỏi tiếp theo sau 2.5 giây công bố kết quả"""
+        try:
+            await asyncio.sleep(delay)
+            room = self.rooms.get(room_code)
+            if not room or room.status != "IN_GAME":
+                return
+            current_round = room.exam.rounds[room.current_round_idx]
+            room.current_question_idx += 1
+            if room.current_question_idx >= len(current_round.questions):
+                room.current_round_idx += 1
+                room.current_question_idx = 0
+            await self.broadcast_next_question(room_code)
+        except asyncio.CancelledError:
+            pass
 
     async def handle_submit_answer(
         self,
@@ -314,15 +383,20 @@ class RoomManager:
 
         # Nếu tất cả người chơi đang kết nối đều đã nộp bài, công bố kết quả câu hỏi ngay
         connected_count = sum(1 for p in room.players.values() if p.is_connected)
-        if len(room.answers_for_current_q) >= connected_count:
+        if len(room.answers_for_current_q) >= connected_count and not room.is_revealed:
             await self.reveal_question_results(room_code)
 
         return result_data
 
     async def reveal_question_results(self, room_code: str):
         room = self.rooms.get(room_code)
-        if not room:
+        if not room or room.is_revealed:
             return
+
+        room.is_revealed = True
+        if room.timer_task and not room.timer_task.done():
+            room.timer_task.cancel()
+            room.timer_task = None
 
         current_q = room.get_current_question()
         if not current_q:
@@ -339,14 +413,22 @@ class RoomManager:
             },
             "answers_summary": room.answers_for_current_q,
             "leaderboard": room.get_leaderboard(),
+            "auto_advance_seconds": 2.5,
         }
 
         await self.broadcast_to_room(room_code, "QUESTION_RESULT", payload)
+
+        # Tự động phát sóng câu hỏi tiếp theo sau 2.5s
+        room.auto_advance_task = asyncio.create_task(
+            self._auto_advance_after_delay(room_code, delay=2.5)
+        )
 
     async def next_question_host(self, room_code: str, host_player_id: str):
         room = self.rooms.get(room_code)
         if not room or room.host_player_id != host_player_id:
             raise PermissionError("Chỉ chủ phòng mới có quyền chuyển câu hỏi!")
+
+        self._cancel_room_tasks(room)
 
         current_round = room.exam.rounds[room.current_round_idx]
         room.current_question_idx += 1

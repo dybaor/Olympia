@@ -293,6 +293,59 @@ def solve_obstacle(
         "current_total_score": session.total_score,
     }
 
+@router.get("/topics")
+def get_document_topics(document_id: str, db: Session = Depends(get_db)):
+    """
+    Lấy danh sách các chủ đề (topics/sections) kèm số lượng câu hỏi của từng chủ đề
+    để hỗ trợ bộ lọc luyện tập theo chuyên đề trong Practice Dojo.
+    """
+    doc_record = db.query(DocumentModel).filter(DocumentModel.id == document_id).first()
+    if not doc_record:
+        raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu gốc")
+
+    bundle = ExtractedKnowledgeBundle.model_validate_json(doc_record.extracted_bundle_json)
+    
+    topics_list = []
+    total_q = bundle.total_direct_questions or 0
+
+    if bundle.is_direct_quiz:
+        counts = getattr(bundle, "topic_question_counts", None) or {}
+        # Nếu chưa có topic_question_counts (tài liệu parse cũ), đếm từ direct_quiz_questions_json
+        if not counts and bundle.direct_quiz_questions_json:
+            try:
+                raw_q = json.loads(bundle.direct_quiz_questions_json)
+                for item in raw_q:
+                    sec = item.get("source_citation", {}).get("page_or_section", "Chung")
+                    counts[sec] = counts.get(sec, 0) + 1
+            except Exception:
+                pass
+        
+        # Duyệt qua direct_quiz_topics hoặc detected_topics
+        all_topics = bundle.direct_quiz_topics or bundle.detected_topics or list(counts.keys())
+        for top in all_topics:
+            c = counts.get(top, 0)
+            topics_list.append({
+                "topic_name": top,
+                "question_count": c
+            })
+        if total_q == 0 and counts:
+            total_q = sum(counts.values())
+    else:
+        for top in bundle.detected_topics:
+            c = len([ch for ch in bundle.chunks if ch.page_or_section == top])
+            topics_list.append({
+                "topic_name": top,
+                "question_count": max(1, c * 5)
+            })
+        total_q = sum(t["question_count"] for t in topics_list)
+
+    return {
+        "document_id": document_id,
+        "document_title": bundle.document_title,
+        "total_questions": total_q,
+        "topics": topics_list
+    }
+
 @router.post("/finish", response_model=GameSessionSummary)
 def finish_game_session(session_id: str, time_spent_sec: float = 120.0, db: Session = Depends(get_db)):
     session = db.query(GameSessionModel).filter(GameSessionModel.id == session_id).first()

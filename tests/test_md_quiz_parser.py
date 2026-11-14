@@ -30,17 +30,18 @@ class TestDirectMDQuizParser(unittest.TestCase):
     def test_02_parse_all_300_questions(self):
         """Bóc tách chính xác 300 câu hỏi và xác thực cấu trúc dữ liệu"""
         content = self.sample_path.read_text(encoding="utf-8")
-        questions, topics = DirectMDQuizParser.parse_document(content, "DOC_TEST", "Test Exam")
+        questions, topics, topic_counts = DirectMDQuizParser.parse_document(content, "DOC_TEST", "Test Exam")
 
         self.assertEqual(len(questions), 300, f"Kỳ vọng 300 câu hỏi, nhận được {len(questions)}")
         self.assertEqual(len(topics), 3, f"Kỳ vọng 3 phần/chương, nhận được {len(topics)}")
+        self.assertEqual(sum(topic_counts.values()), 300, f"Kỳ vọng tổng 300 câu theo topics, nhận {sum(topic_counts.values())}")
 
-        print(f"  ✓ Test 2: Bóc tách thành công {len(questions)}/300 câu hỏi từ {len(topics)} chuyên đề!")
+        print(f"  ✓ Test 2: Bóc tách thành công {len(questions)}/300 câu hỏi từ {len(topics)} chuyên đề! Topic counts: {topic_counts}")
 
     def test_03_options_and_correct_answers_integrity(self):
         """Kiểm tra 100% câu hỏi có đủ 4 lựa chọn, đáp án đúng sạch sẽ (không lộ dấu **)"""
         content = self.sample_path.read_text(encoding="utf-8")
-        questions, _ = DirectMDQuizParser.parse_document(content, "DOC_TEST", "Test Exam")
+        questions, _, _ = DirectMDQuizParser.parse_document(content, "DOC_TEST", "Test Exam")
 
         for idx, q in enumerate(questions):
             self.assertEqual(len(q.options), 4, f"Câu {idx+1} không có đủ 4 phương án: {q.options}")
