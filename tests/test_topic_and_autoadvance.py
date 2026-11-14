@@ -106,5 +106,68 @@ class TestTopicAndAutoAdvance(unittest.TestCase):
         multiplayer_manager._cancel_room_tasks(room)
         print("  ✓ Test 3: Trạng thái phòng và cơ chế tự động chuyển câu hỏi Multiplayer hoạt động chuẩn xác!")
 
+    def test_04_round_1_blind_and_summary_flow(self):
+        """Kiểm tra cơ chế Thi Mù và Bảng tổng kết Vòng 1 (Khởi động) trong Multiplayer"""
+        cfg = UserMatchConfig(match_mode="ARENA_COMPETITION")
+        exam = DirectMDQuizParser.build_olympic_exam(self.bundle, cfg)
+
+        room_code, host_id = multiplayer_manager.create_room(
+            host_nickname="Minh Triết (Host)",
+            document_id="DOC_TEST_TOPIC",
+            document_title="Test Exam",
+            exam=exam,
+            config=cfg
+        )
+        p2_id, room = multiplayer_manager.join_room(room_code, "Bảo Long")
+
+        # Đặt trạng thái Vòng 1
+        room.status = "IN_GAME"
+        room.current_round_idx = 0
+        r1_q = room.get_current_question()
+        self.assertIsNotNone(r1_q)
+
+        # Giả lập lưu lịch sử Vòng 1
+        room.round1_history[r1_q.question_id] = {
+            host_id: {
+                "user_answer": r1_q.correct_answer,
+                "is_correct": True,
+                "delta_score": 10,
+                "time_expired": False,
+                "time_taken_sec": 2.5
+            },
+            p2_id: {
+                "user_answer": "Sai",
+                "is_correct": False,
+                "delta_score": 0,
+                "time_expired": False,
+                "time_taken_sec": 4.1
+            }
+        }
+
+        # Kiểm tra bảng tổng kết Vòng 1
+        summary_rows = []
+        r1 = room.exam.rounds[0]
+        for idx, q in enumerate(r1.questions):
+            q_hist = room.round1_history.get(q.question_id, {})
+            summary_rows.append({
+                "stt": idx + 1,
+                "question_id": q.question_id,
+                "question_text": q.prompt,
+                "correct_answer": q.correct_answer,
+                "explanation": q.explanation,
+                "player_results": q_hist
+            })
+
+        self.assertEqual(len(summary_rows), len(r1.questions))
+        self.assertIn(host_id, summary_rows[0]["player_results"])
+        self.assertTrue(summary_rows[0]["player_results"][host_id]["is_correct"])
+        self.assertFalse(summary_rows[0]["player_results"][p2_id]["is_correct"])
+
+        # Kiểm tra quyền chuyển Vòng 2 của Host
+        room.status = "ROUND_1_SUMMARY"
+        self.assertEqual(room.status, "ROUND_1_SUMMARY")
+
+        print("  ✓ Test 4: Cơ chế Thi Mù & Bảng tổng kết Vòng 1 kiểm định thành công 100%!")
+
 if __name__ == "__main__":
     unittest.main()

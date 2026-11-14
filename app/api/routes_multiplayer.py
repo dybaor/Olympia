@@ -102,6 +102,7 @@ def get_room_details(room_code: str):
 
 @router.websocket("/ws/{room_code}/{player_id}")
 async def websocket_multiplayer_endpoint(websocket: WebSocket, room_code: str, player_id: str):
+    await websocket.accept()
     code = room_code.strip().upper()
     room = multiplayer_manager.rooms.get(code)
     if not room:
@@ -113,7 +114,6 @@ async def websocket_multiplayer_endpoint(websocket: WebSocket, room_code: str, p
         await websocket.close(code=4003, reason="Người chơi không thuộc phòng này")
         return
 
-    await websocket.accept()
     player.ws = websocket
     player.is_connected = True
 
@@ -169,8 +169,12 @@ async def websocket_multiplayer_endpoint(websocket: WebSocket, room_code: str, p
                     time_taken_sec=time_taken,
                 )
 
-            elif action == "NEXT_QUESTION":
-                await multiplayer_manager.next_question_host(code, host_player_id=player_id)
+            elif action in ["NEXT_QUESTION", "CONTINUE_ROUND_2", "NEXT_ROUND"]:
+                room = multiplayer_manager.rooms.get(code)
+                if room and room.status == "ROUND_1_SUMMARY":
+                    await multiplayer_manager.start_round_2(code, host_player_id=player_id)
+                else:
+                    await multiplayer_manager.next_question_host(code, host_player_id=player_id)
 
             elif action == "TOGGLE_STAR_OF_HOPE":
                 await multiplayer_manager.toggle_star_of_hope(code, player_id=player_id)

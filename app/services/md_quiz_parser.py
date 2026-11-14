@@ -310,6 +310,86 @@ class DirectMDQuizParser:
         return bundle
 
     @classmethod
+    def build_merged_knowledge_bundle(
+        cls,
+        files_data: List[Dict[str, Any]],
+        doc_id: str,
+        combined_title: str
+    ) -> ExtractedKnowledgeBundle:
+        """
+        Gộp nhiều file bộ đề Markdown vào chung 1 ExtractedKnowledgeBundle:
+        - Đánh lại STT câu hỏi liên tục (MD_Q_001, MD_Q_002,...).
+        - Gắn nhãn tên file nguồn vào chuyên đề nếu có nhiều file để dễ chọn lọc trong phòng luyện tập.
+        - Giữ nguyên 100% nội dung câu hỏi, đáp án đúng và phần giải thích gốc.
+        """
+        all_questions: List[OlympicQuestion] = []
+        all_topics: List[str] = []
+        all_topic_counts: Dict[str, int] = {}
+        multi = len(files_data) > 1
+
+        for f_idx, item in enumerate(files_data):
+            fname = item["filename"]
+            content = item["content"]
+            parse_res = cls.parse_document(content, f"{doc_id}_{f_idx}", fname)
+            if len(parse_res) == 3:
+                q_list, topics, counts = parse_res
+            else:
+                q_list, topics = parse_res
+                counts = {}
+
+            topic_prefix = f"[{fname}] " if multi else ""
+
+            for top in topics:
+                prefixed_top = f"{topic_prefix}{top}"
+                if prefixed_top not in all_topics:
+                    all_topics.append(prefixed_top)
+                all_topic_counts[prefixed_top] = all_topic_counts.get(prefixed_top, 0) + counts.get(top, 0)
+
+            for q in q_list:
+                orig_sec = q.source_citation.page_or_section
+                prefixed_sec = f"{topic_prefix}{orig_sec}"
+                q.source_citation.page_or_section = prefixed_sec
+                if multi:
+                    q.progressive_hints.level_1_hint = f"💡 Gợi ý tư duy: Câu hỏi thuộc chuyên đề '{prefixed_sec}'."
+                all_questions.append(q)
+
+        # Đánh lại ID câu hỏi liên tục
+        for i, q in enumerate(all_questions):
+            q.question_id = f"MD_Q_{i+1:03d}"
+            q.source_citation.chunk_id = f"MD_CHUNK_{i+1:03d}"
+
+        chunks = [
+            ChunkMetadata(
+                chunk_id=f"CHUNK_{idx+1}",
+                content=f"Chuyên đề: {top}",
+                page_or_section=top,
+                token_count_approx=500,
+                primary_bloom_level="UNDERSTAND"
+            )
+            for idx, top in enumerate(all_topics)
+        ]
+
+        return ExtractedKnowledgeBundle(
+            document_id=doc_id,
+            document_title=combined_title,
+            total_chunks=len(chunks),
+            detected_topics=all_topics,
+            chunks=chunks,
+            concept_map=ConceptMap(
+                core_definitions=[],
+                formulas_and_theorems=[],
+                causal_relationships=[],
+                edge_cases=[],
+                domain_glossary=[]
+            ),
+            is_direct_quiz=True,
+            direct_quiz_questions_json=json.dumps([q.model_dump() for q in all_questions], ensure_ascii=False),
+            direct_quiz_topics=all_topics,
+            topic_question_counts=all_topic_counts,
+            total_direct_questions=len(all_questions)
+        )
+
+    @classmethod
     def build_olympic_exam(
         cls, 
         bundle: ExtractedKnowledgeBundle, 

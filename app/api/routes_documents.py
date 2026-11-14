@@ -3,11 +3,13 @@ import json
 import uuid
 import shutil
 from pathlib import Path
+from typing import List, Optional
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from sqlalchemy.orm import Session
 
 from app.core.config import UPLOAD_DIR
 from app.core.database import get_db, DocumentModel, ExamModel
+from app.models.schemas_extracted import ExtractedKnowledgeBundle, ConceptMap, ChunkMetadata
 from app.skills.doc_parser import KnowledgeGraphExtractor
 from app.services.swarm_orchestrator import SwarmOrchestrator
 from app.services.md_quiz_parser import DirectMDQuizParser
@@ -18,59 +20,149 @@ orchestrator = SwarmOrchestrator()
 
 @router.post("/upload")
 async def upload_document(
-    file: UploadFile = File(...),
+    files: Optional[List[UploadFile]] = File(None),
+    file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
 ):
     """
-    Tải lên tài liệu (PDF, DOCX, MD, TXT):
+    Tải lên 1 hoặc nhiều tài liệu (PDF, DOCX, MD, TXT) cùng lúc (Multi-file Upload):
     - Tự động nhận diện cấu trúc đề trắc nghiệm Markdown (Direct_MD_Quiz_Parser).
-    - Nếu là file trắc nghiệm chuẩn: Chuyển sang Fast-Import tức thì, 100% chính xác, không gọi LLM.
-    - Nếu là tài liệu lý thuyết: Kích hoạt Agent 1 phân tầng nhận thức Bloom như cũ.
+    - Tự động gộp dữ liệu câu hỏi, chuyên đề và phân tầng tư duy từ toàn bộ các file được gửi lên.
+    - Đánh lại ID câu hỏi liên tục, gắn nhãn tên file nguồn vào chuyên đề khi có nhiều file.
+    - Tương thích ngược hoàn toàn với việc upload đơn 1 file.
     """
-    ext = Path(file.filename).suffix.lower()
-    if ext not in [".pdf", ".docx", ".md", ".txt"]:
+    upload_list: List[UploadFile] = []
+    if files:
+        upload_list.extend([f for f in files if f.filename])
+    if file and file.filename and file not in upload_list:
+        upload_list.append(file)
+
+    if not upload_list:
         raise HTTPException(
             status_code=400, 
-            detail=f"Định dạng {ext} không được hỗ trợ. Vui lòng tải lên PDF, DOCX, MD hoặc TXT."
+            detail="Vui lòng chọn ít nhất một tệp tài liệu (PDF, DOCX, MD, TXT)."
         )
 
-    doc_id = f"DOC_{uuid.uuid4().hex[:8]}"
-    file_save_path = UPLOAD_DIR / f"{doc_id}_{file.filename}"
+    # Kiểm tra định dạng tất cả file
+    valid_exts = [".pdf", ".docx", ".md", ".txt"]
+    for uf in upload_list:
+        ext = Path(uf.filename).suffix.lower()
+        if ext not in valid_exts:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Định dạng '{ext}' của file '{uf.filename}' không được hỗ trợ. Vui lòng tải lên PDF, DOCX, MD hoặc TXT."
+            )
 
-    with open(file_save_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    doc_id = f"DOC_{uuid.uuid4().hex[:8]}"
+    saved_files = []
 
     try:
-        # XÓA BỘ ĐỀ VÀ KẾT QUẢ CŨ CÙNG TÊN ĐỂ TRÁNH DỮ LIỆU CACHE CŨ
-        old_docs = db.query(DocumentModel).filter(DocumentModel.title == file.filename).all()
-        for od in old_docs:
-            db.query(ExamModel).filter(ExamModel.document_id == od.id).delete()
-            db.delete(od)
-        db.commit()
+        # Lưu các file vào thư mục UPLOAD_DIR bằng async read an toàn
+        for uf in upload_list:
+            safe_name = uf.filename.replace(" ", "_")
+            file_save_path = UPLOAD_DIR / f"{doc_id}_{safe_name}"
+            content_bytes = await uf.read()
+            file_save_path.write_bytes(content_bytes)
+            saved_files.append((uf.filename, file_save_path, content_bytes))
 
-        # KIỂM TRA TỰ ĐỘNG: Có phải file Markdown bộ đề trắc nghiệm sẵn không?
-        is_direct_md = False
-        if ext in [".md", ".txt"]:
-            content = file_save_path.read_text(encoding="utf-8")
-            if DirectMDQuizParser.is_markdown_quiz(content):
-                is_direct_md = True
-                # KHÓA HOÀN TOÀN LUỒNG EXTRACTOR/GENERATOR: Chỉ nạp 100% câu hỏi gốc
+        # Phân loại và bóc tách từng file
+        md_quiz_files = []
+        theory_bundles = []
+
+        for fname, fpath, cbytes in saved_files:
+            ext = fpath.suffix.lower()
+            if ext in [".md", ".txt"]:
+                content = cbytes.decode("utf-8", errors="ignore")
+                if DirectMDQuizParser.is_markdown_quiz(content):
+                    md_quiz_files.append({"filename": fname, "content": content, "path": str(fpath)})
+                    continue
+
+            # File lý thuyết thông thường: chạy trích xuất KnowledgeGraphExtractor
+            sub_bundle = extractor.process_document(str(fpath), doc_id=f"{doc_id}_{len(theory_bundles)}")
+            theory_bundles.append(sub_bundle)
+
+        # XÂY DỰNG BUNDLE TỔNG HỢP (SMART MERGING)
+        combined_title = upload_list[0].filename if len(upload_list) == 1 else " + ".join([uf.filename for uf in upload_list[:3]])
+        if len(upload_list) > 3:
+            combined_title += f" (+{len(upload_list)-3} tệp khác)"
+
+        if md_quiz_files:
+            # Có ít nhất 1 file là bộ đề trắc nghiệm nguyên bản
+            if len(md_quiz_files) == 1 and not theory_bundles:
                 bundle = DirectMDQuizParser.build_knowledge_bundle(
-                    content=content,
+                    content=md_quiz_files[0]["content"],
                     doc_id=doc_id,
-                    doc_title=file.filename
+                    doc_title=md_quiz_files[0]["filename"]
+                )
+            else:
+                bundle = DirectMDQuizParser.build_merged_knowledge_bundle(
+                    files_data=md_quiz_files,
+                    doc_id=doc_id,
+                    combined_title=combined_title
                 )
 
-        if not is_direct_md:
-            # Kích hoạt Agent 1: Bóc tách tri thức & phân tầng Bloom thông thường cho tài liệu lý thuyết
-            bundle = extractor.process_document(str(file_save_path), doc_id=doc_id)
+            # Nếu có thêm các file lý thuyết đi kèm, gộp các chunk và concept_map vào
+            if theory_bundles:
+                for tb in theory_bundles:
+                    bundle.chunks.extend(tb.chunks)
+                    bundle.concept_map.core_definitions.extend(tb.concept_map.core_definitions)
+                    bundle.concept_map.formulas_and_theorems.extend(tb.concept_map.formulas_and_theorems)
+                    bundle.concept_map.causal_relationships.extend(tb.concept_map.causal_relationships)
+                    bundle.concept_map.edge_cases.extend(tb.concept_map.edge_cases)
+                    for term in tb.concept_map.domain_glossary:
+                        if term not in bundle.concept_map.domain_glossary:
+                            bundle.concept_map.domain_glossary.append(term)
+                bundle.total_chunks = len(bundle.chunks)
+        else:
+            # Toàn bộ là file lý thuyết: Gộp các theory bundles
+            if len(theory_bundles) == 1:
+                bundle = theory_bundles[0]
+                bundle.document_id = doc_id
+            else:
+                merged_chunks = []
+                merged_topics = []
+                all_defs = []
+                all_forms = []
+                all_caus = []
+                all_edge = []
+                all_gloss = []
+                for tb in theory_bundles:
+                    merged_chunks.extend(tb.chunks)
+                    for t in tb.detected_topics:
+                        if t not in merged_topics:
+                            merged_topics.append(t)
+                    all_defs.extend(tb.concept_map.core_definitions)
+                    all_forms.extend(tb.concept_map.formulas_and_theorems)
+                    all_caus.extend(tb.concept_map.causal_relationships)
+                    all_edge.extend(tb.concept_map.edge_cases)
+                    for term in tb.concept_map.domain_glossary:
+                        if term not in all_gloss:
+                            all_gloss.append(term)
+
+                bundle = ExtractedKnowledgeBundle(
+                    document_id=doc_id,
+                    document_title=combined_title,
+                    total_chunks=len(merged_chunks),
+                    detected_topics=merged_topics,
+                    chunks=merged_chunks,
+                    concept_map=ConceptMap(
+                        core_definitions=all_defs,
+                        formulas_and_theorems=all_forms,
+                        causal_relationships=all_caus,
+                        edge_cases=all_edge,
+                        domain_glossary=all_gloss
+                    ),
+                    is_direct_quiz=False,
+                    total_direct_questions=0
+                )
 
         # Lưu Document vào Database
+        primary_file_path = str(saved_files[0][1])
         doc_record = DocumentModel(
             id=doc_id,
             title=bundle.document_title,
-            file_type=ext,
-            file_path=str(file_save_path),
+            file_type="multi" if len(upload_list) > 1 else Path(upload_list[0].filename).suffix.lower(),
+            file_path=primary_file_path,
             raw_content="",
             extracted_bundle_json=bundle.model_dump_json(),
         )
@@ -92,6 +184,8 @@ async def upload_document(
             "status": "success",
             "document_id": doc_id,
             "title": bundle.document_title,
+            "file_count": len(upload_list),
+            "files": [uf.filename for uf in upload_list],
             "is_direct_quiz": bundle.is_direct_quiz,
             "total_quiz_questions": bundle.total_direct_questions if bundle.is_direct_quiz else 0,
             "topics": bundle.direct_quiz_topics if bundle.is_direct_quiz else bundle.detected_topics,

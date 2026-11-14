@@ -59,6 +59,8 @@ class MultiplayerRoom:
         self.question_start_time: float = 0
         self.question_time_limit: int = 20
         self.answers_for_current_q: Dict[str, Dict[str, Any]] = {}
+        self.round1_history: Dict[str, Dict[str, Any]] = {}
+        self.round1_start_scores: Dict[str, int] = {}
         self.timer_task: Optional[asyncio.Task] = None
         self.auto_advance_task: Optional[asyncio.Task] = None
         self.is_revealed: bool = False
@@ -288,8 +290,8 @@ class RoomManager:
         except asyncio.CancelledError:
             pass
 
-    async def _auto_advance_after_delay(self, room_code: str, delay: float = 2.5):
-        """Tự động chuyển câu hỏi tiếp theo sau 2.5 giây công bố kết quả"""
+    async def _auto_advance_after_delay(self, room_code: str, delay: float = 5.0):
+        """Tự động chuyển câu hỏi tiếp theo sau khoảng delay công bố kết quả"""
         try:
             await asyncio.sleep(delay)
             room = self.rooms.get(room_code)
@@ -298,11 +300,72 @@ class RoomManager:
             current_round = room.exam.rounds[room.current_round_idx]
             room.current_question_idx += 1
             if room.current_question_idx >= len(current_round.questions):
-                room.current_round_idx += 1
-                room.current_question_idx = 0
+                if room.current_round_idx == 0:
+                    # KẾT THÚC VÒNG 1: Chuyển sang màn hình Bảng tổng kết Vòng 1
+                    room.status = "ROUND_1_SUMMARY"
+                    await self.broadcast_round_1_summary(room_code)
+                    return
+                else:
+                    room.current_round_idx += 1
+                    room.current_question_idx = 0
             await self.broadcast_next_question(room_code)
         except asyncio.CancelledError:
             pass
+
+    async def broadcast_round_1_summary(self, room_code: str):
+        """Phát sóng Bảng đối chiếu kết quả Vòng 1 cho toàn phòng"""
+        room = self.rooms.get(room_code)
+        if not room:
+            return
+        r1 = room.exam.rounds[0]
+        summary_rows = []
+        for idx, q in enumerate(r1.questions):
+            q_hist = room.round1_history.get(q.question_id, {})
+            summary_rows.append({
+                "stt": idx + 1,
+                "question_id": q.question_id,
+                "question_text": q.prompt,
+                "correct_answer": q.correct_answer,
+                "explanation": q.explanation,
+                "player_results": q_hist
+            })
+
+        payload = {
+            "round_number": 1,
+            "round_name": "Khởi Động",
+            "summary_table": summary_rows,
+            "leaderboard": room.get_leaderboard(),
+            "auto_advance_seconds": 15.0,
+        }
+        await self.broadcast_to_room(room_code, "ROUND_1_SUMMARY", payload)
+
+        # Sau 15s tự động sang Vòng 2 nếu Host không bấm chuyển ngay
+        room.auto_advance_task = asyncio.create_task(
+            self._auto_advance_round_2(room_code, delay=15.0)
+        )
+
+    async def _auto_advance_round_2(self, room_code: str, delay: float = 15.0):
+        try:
+            await asyncio.sleep(delay)
+            room = self.rooms.get(room_code)
+            if not room or room.status != "ROUND_1_SUMMARY":
+                return
+            await self.start_round_2(room_code, room.host_player_id)
+        except asyncio.CancelledError:
+            pass
+
+    async def start_round_2(self, room_code: str, host_player_id: str):
+        """Chuyển từ Bảng tổng kết Vòng 1 sang Vòng 2 (Vượt chướng ngại vật)"""
+        room = self.rooms.get(room_code)
+        if not room:
+            return
+        if room.host_player_id != host_player_id:
+            raise PermissionError("Chỉ chủ phòng mới có quyền chuyển sang Vòng 2!")
+        self._cancel_room_tasks(room)
+        room.status = "IN_GAME"
+        room.current_round_idx = 1
+        room.current_question_idx = 0
+        await self.broadcast_next_question(room_code)
 
     async def handle_submit_answer(
         self,
@@ -372,6 +435,18 @@ class RoomManager:
         player.last_answer = result_data
         room.answers_for_current_q[player_id] = result_data
 
+        # Lưu lại lịch sử câu trả lời cho Vòng 1 để tổng kết
+        if current_q.round_number == 1:
+            if current_q.question_id not in room.round1_history:
+                room.round1_history[current_q.question_id] = {}
+            room.round1_history[current_q.question_id][player_id] = {
+                "user_answer": user_answer,
+                "is_correct": feedback.is_correct,
+                "delta_score": feedback.total_delta_score,
+                "time_expired": feedback.time_expired,
+                "time_taken_sec": verified_time_taken,
+            }
+
         # Phát sóng thông báo người chơi đã nộp bài (giấu đáp án cho tới khi kết thúc câu)
         await self.broadcast_to_room(room_code, "PLAYER_SUBMITTED", {
             "player_id": player_id,
@@ -402,25 +477,42 @@ class RoomManager:
         if not current_q:
             return
 
-        payload = {
-            "question_id": current_q.question_id,
-            "correct_answer": current_q.correct_answer,
-            "explanation": current_q.explanation,
-            "source_citation": {
-                "chunk_id": current_q.source_citation.chunk_id,
-                "exact_quote": current_q.source_citation.exact_quote,
-                "page_or_section": current_q.source_citation.page_or_section,
-            },
-            "answers_summary": room.answers_for_current_q,
-            "leaderboard": room.get_leaderboard(),
-            "auto_advance_seconds": 2.5,
-        }
+        is_round_1 = (current_q.round_number == 1)
+
+        if is_round_1:
+            # VÒNG 1: CHẾ ĐỘ THI MÙ (KHÔNG LỘ ĐÁP ÁN ĐÚNG/SAI, TỰ ĐỘNG CHUYỂN NHANH SAU 1.5S)
+            advance_delay = 1.5
+            payload = {
+                "round_number": 1,
+                "is_blind": True,
+                "question_id": current_q.question_id,
+                "auto_advance_seconds": 1.5,
+                "message": "Đã ghi nhận đáp án của tất cả đấu thủ!",
+            }
+        else:
+            # VÒNG 2, 3, 4: HIỂN THỊ ĐÁP ÁN ĐÚNG, GIẢI THÍCH VÀ ĐẾM NGƯỢC 5 GIÂY
+            advance_delay = 5.0
+            payload = {
+                "round_number": current_q.round_number,
+                "is_blind": False,
+                "question_id": current_q.question_id,
+                "correct_answer": current_q.correct_answer,
+                "explanation": current_q.explanation,
+                "source_citation": {
+                    "chunk_id": current_q.source_citation.chunk_id,
+                    "exact_quote": current_q.source_citation.exact_quote,
+                    "page_or_section": current_q.source_citation.page_or_section,
+                },
+                "answers_summary": room.answers_for_current_q,
+                "leaderboard": room.get_leaderboard(),
+                "auto_advance_seconds": 5.0,
+            }
 
         await self.broadcast_to_room(room_code, "QUESTION_RESULT", payload)
 
-        # Tự động phát sóng câu hỏi tiếp theo sau 2.5s
+        # Tự động phát sóng câu hỏi tiếp theo
         room.auto_advance_task = asyncio.create_task(
-            self._auto_advance_after_delay(room_code, delay=2.5)
+            self._auto_advance_after_delay(room_code, delay=advance_delay)
         )
 
     async def next_question_host(self, room_code: str, host_player_id: str):
@@ -430,12 +522,21 @@ class RoomManager:
 
         self._cancel_room_tasks(room)
 
+        if room.status == "ROUND_1_SUMMARY":
+            await self.start_round_2(room_code, host_player_id)
+            return
+
         current_round = room.exam.rounds[room.current_round_idx]
         room.current_question_idx += 1
 
         if room.current_question_idx >= len(current_round.questions):
-            room.current_round_idx += 1
-            room.current_question_idx = 0
+            if room.current_round_idx == 0:
+                room.status = "ROUND_1_SUMMARY"
+                await self.broadcast_round_1_summary(room_code)
+                return
+            else:
+                room.current_round_idx += 1
+                room.current_question_idx = 0
 
         await self.broadcast_next_question(room_code)
 

@@ -134,20 +134,42 @@
       <!-- Drag & Drop Zone -->
       <div class="max-w-xl mx-auto">
         <div id="dropZone" class="border-2 border-dashed border-slate-700 hover:border-cyan-500 rounded-2xl p-8 text-center bg-arena-800/40 hover:bg-arena-800/80 transition duration-300 cursor-pointer relative group">
-          <input type="file" id="fileInput" accept=".pdf,.docx,.md,.txt" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+          <input type="file" id="fileInput" multiple accept=".pdf,.docx,.md,.txt" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
           <div class="space-y-4 pointer-events-none">
             <div class="w-16 h-16 mx-auto rounded-2xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-3xl group-hover:scale-110 transition">
               <i class="fa-solid fa-cloud-arrow-up"></i>
             </div>
             <div>
-              <p class="font-medium text-white">Kéo thả tài liệu vào đây hoặc <span class="text-cyan-400 underline">chọn từ máy tính</span></p>
-              <p class="text-xs text-slate-400 mt-1">Hỗ trợ PDF, DOCX, Markdown (.md), Plain Text (.txt)</p>
+              <p class="font-medium text-white">Kéo thả một hoặc nhiều tài liệu vào đây hoặc <span class="text-cyan-400 underline">chọn từ máy tính</span></p>
+              <p class="text-xs text-slate-400 mt-1">Hỗ trợ chọn nhiều file cùng lúc: PDF, DOCX, Markdown (.md), Plain Text (.txt)</p>
             </div>
             <div class="inline-flex items-center space-x-3 text-xs text-slate-400 bg-arena-900/60 px-4 py-1.5 rounded-full border border-slate-700">
-              <span><i class="fa-solid fa-check text-emerald-400 mr-1"></i> Phân tầng Bloom</span>
-              <span><i class="fa-solid fa-check text-emerald-400 mr-1"></i> Gợi ý 2 tầng</span>
-              <span><i class="fa-solid fa-check text-emerald-400 mr-1"></i> 100% Citation</span>
+              <span><i class="fa-solid fa-layer-group text-cyan-400 mr-1"></i> Multi-file Upload</span>
+              <span><i class="fa-solid fa-check text-emerald-400 mr-1"></i> Gộp đề thông minh</span>
+              <span><i class="fa-solid fa-bolt text-amber-400 mr-1"></i> Tự động nhận diện</span>
             </div>
+          </div>
+        </div>
+
+        <!-- Danh sách file đã chọn (Multi-file Queue) -->
+        <div id="fileQueueBox" class="hidden mt-4 bg-arena-800/90 border border-slate-700 rounded-xl p-4 space-y-3 shadow-lg">
+          <div class="flex items-center justify-between border-b border-slate-700/80 pb-2">
+            <span class="text-xs font-bold text-slate-200 uppercase flex items-center gap-2">
+              <i class="fa-solid fa-folder-open text-cyan-400"></i>
+              <span>Danh sách tài liệu đã chọn (<span id="queueCount" class="text-cyan-400">0</span>)</span>
+            </span>
+            <button type="button" onclick="clearFileQueue()" class="text-[11px] text-rose-400 hover:text-rose-300 font-medium transition">
+              <i class="fa-solid fa-trash-can mr-1"></i> Xóa tất cả
+            </button>
+          </div>
+          <div id="fileQueueList" class="space-y-2 max-h-48 overflow-y-auto pr-1"></div>
+          <div class="pt-2 flex items-center justify-between gap-3">
+            <button type="button" onclick="document.getElementById('fileInput').click()" class="text-xs px-3 py-2 rounded-lg bg-arena-900 hover:bg-slate-700 border border-slate-600 text-slate-200 transition">
+              <i class="fa-solid fa-plus mr-1"></i> Thêm tệp
+            </button>
+            <button type="button" id="startUploadBtn" onclick="submitFilesUpload()" class="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 transition">
+              <i class="fa-solid fa-bolt"></i> TẢI LÊN & KHỞI TẠO ĐẤU TRƯỜNG (<span id="submitBtnCount">0</span> TỆP)
+            </button>
           </div>
         </div>
 
@@ -713,6 +735,68 @@
       </div>
     </div>
 
+    <!-- BẢNG TỔNG KẾT KẾT QUẢ VÒNG 1 (ROUND 1 SUMMARY MODAL) -->
+    <div id="round1SummaryModal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 md:p-6 overflow-y-auto">
+      <div class="bg-arena-900 border-2 border-cyan-500/70 rounded-2xl max-w-5xl w-full max-h-[90vh] flex flex-col shadow-2xl shadow-cyan-500/20 overflow-hidden">
+        <!-- Header -->
+        <div class="p-4 md:p-5 border-b border-slate-700/80 bg-gradient-to-r from-cyan-950/80 via-arena-900 to-blue-950/80 flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-400 flex items-center justify-center text-cyan-400 text-lg font-bold">
+              <i class="fa-solid fa-flag-checkered"></i>
+            </div>
+            <div>
+              <h3 class="text-base md:text-xl font-black text-white uppercase tracking-wide">TỔNG KẾT VÒNG 1 - KHỞI ĐỘNG</h3>
+              <p class="text-xs text-cyan-300">Bảng đối chiếu đáp án chi tiết & điểm số đạt được</p>
+            </div>
+          </div>
+          <div class="flex items-center space-x-3">
+            <div class="px-3.5 py-1.5 rounded-xl bg-amber-500/20 border border-amber-400/50 text-amber-300 font-mono font-bold text-sm">
+              <span>Điểm Vòng 1: </span><span id="r1SummaryTotalScore" class="text-lg text-amber-400 font-black">0</span>đ
+            </div>
+          </div>
+        </div>
+
+        <!-- Table Container -->
+        <div class="p-4 md:p-6 overflow-y-auto flex-1 space-y-4">
+          <!-- Multiplayer Mini Leaderboard if applicable -->
+          <div id="r1SummaryMpLeaderboard" class="hidden p-3.5 rounded-xl bg-arena-800/80 border border-purple-500/40 space-y-2">
+            <h4 class="text-xs font-bold text-purple-300 uppercase flex items-center gap-1.5">
+              <i class="fa-solid fa-trophy text-amber-400"></i> Bảng Xếp Hạng Phòng Đấu Sau Vòng 1:
+            </h4>
+            <div id="r1MpLeaderboardRows" class="grid grid-cols-2 md:grid-cols-4 gap-2"></div>
+          </div>
+
+          <!-- HTML Table -->
+          <div class="overflow-x-auto rounded-xl border border-slate-700/70 shadow">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="bg-arena-800/90 text-cyan-300 font-bold uppercase tracking-wider border-b border-slate-700">
+                  <th class="p-3 w-12 text-center">STT</th>
+                  <th class="p-3 min-w-[220px]">Nội dung câu hỏi</th>
+                  <th class="p-3 min-w-[150px]">Đáp án bạn chọn</th>
+                  <th class="p-3 min-w-[150px]">Đáp án đúng</th>
+                  <th class="p-3 min-w-[260px]">Giải thích chi tiết</th>
+                </tr>
+              </thead>
+              <tbody id="r1SummaryTableBody" class="divide-y divide-slate-800 bg-arena-900/60 text-slate-300">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="p-4 border-t border-slate-700/80 bg-arena-950 flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-2 text-xs text-amber-300 font-medium">
+            <i class="fa-solid fa-clock-rotate-left text-amber-400 animate-spin"></i>
+            <span id="r1CountdownText">Tự động chuyển sang Vòng 2 sau 15s...</span>
+          </div>
+          <button id="btnContinueRound2" onclick="continueToRound2()" class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-black text-xs uppercase tracking-wider shadow-lg transition">
+            TIẾP TỤC SANG VÒNG 2 <i class="fa-solid fa-arrow-right ml-1.5"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- SCREEN 4: SUMMARY & RADAR -->
     <div id="summaryScreen" class="hidden space-y-8">
       <div class="text-center space-y-2">
@@ -952,41 +1036,159 @@
       autoAdvanceInterval: null,
       practiceOrder: 'sequential',
       selectedTopic: 'ALL',
+      round1ReviewData: [],
+      round1ScoreAccumulated: 0,
+      r1SummaryInterval: null,
+      selectedFiles: [],
+      mpReconnectAttempts: 0,
     };
 
-    // UPLOAD TÀI LIỆU -> CHUYỂN SANG PHÒNG CẤU HÌNH (LOBBY)
-    const fileInput = document.getElementById('fileInput');
-    fileInput.addEventListener('change', (e) => {
-      if (e.target.files.length > 0) handleUpload(e.target.files[0]);
-    });
+    // QUẢN LÝ TẢI LÊN NHIỀU FILE (MULTI-FILE UPLOAD) & KÉO THẢ
+    function formatFileSize(bytes) {
+      if (!bytes || bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
 
-    async function handleUpload(file) {
+    function getFileIcon(name) {
+      const ext = name.split('.').pop().toLowerCase();
+      if (ext === 'md') return '<i class="fa-brands fa-markdown text-sky-400"></i>';
+      if (ext === 'pdf') return '<i class="fa-solid fa-file-pdf text-rose-400"></i>';
+      if (ext === 'docx') return '<i class="fa-solid fa-file-word text-blue-400"></i>';
+      return '<i class="fa-solid fa-file-lines text-slate-400"></i>';
+    }
+
+    function addFilesToQueue(newFiles, autoUpload = true) {
+      const validExts = ['pdf', 'docx', 'md', 'txt'];
+      let addedCount = 0;
+
+      for (const file of newFiles) {
+        const ext = file.name.split('.').pop().toLowerCase();
+        if (!validExts.includes(ext)) {
+          alert(`Tệp "${file.name}" không hợp lệ. Vui lòng chọn file .md, .pdf, .docx hoặc .txt`);
+          continue;
+        }
+        // Kiểm tra trùng lặp
+        const isDuplicate = appState.selectedFiles.some(f => f.name === file.name && f.size === file.size);
+        if (!isDuplicate) {
+          appState.selectedFiles.push(file);
+          addedCount++;
+        }
+      }
+
+      if (addedCount > 0) {
+        renderFileQueue();
+        if (autoUpload) {
+          submitFilesUpload();
+        }
+      }
+    }
+
+    function removeFileFromQueue(index) {
+      if (index >= 0 && index < appState.selectedFiles.length) {
+        appState.selectedFiles.splice(index, 1);
+        renderFileQueue();
+      }
+    }
+
+    function clearFileQueue() {
+      appState.selectedFiles = [];
+      const fileInput = document.getElementById('fileInput');
+      if (fileInput) fileInput.value = '';
+      renderFileQueue();
+    }
+
+    function renderFileQueue() {
+      const qBox = document.getElementById('fileQueueBox');
+      const qList = document.getElementById('fileQueueList');
+      const qCount = document.getElementById('queueCount');
+      const submitBtnCount = document.getElementById('submitBtnCount');
+
+      const count = appState.selectedFiles.length;
+      if (!qBox || !qList) return;
+
+      if (count === 0) {
+        qBox.classList.add('hidden');
+        return;
+      }
+
+      qBox.classList.remove('hidden');
+      if (qCount) qCount.innerText = count;
+      if (submitBtnCount) submitBtnCount.innerText = count;
+
+      qList.innerHTML = appState.selectedFiles.map((file, idx) => `
+        <div class="flex items-center justify-between p-2.5 rounded-lg bg-arena-900 border border-slate-700/80 text-xs">
+          <div class="flex items-center space-x-2.5 min-w-0">
+            <span class="text-base">${getFileIcon(file.name)}</span>
+            <div class="truncate">
+              <p class="font-semibold text-white truncate max-w-[280px] md:max-w-[360px]">${file.name}</p>
+              <p class="text-[10px] text-slate-400">${formatFileSize(file.size)}</p>
+            </div>
+          </div>
+          <button type="button" onclick="removeFileFromQueue(${idx})" class="text-slate-400 hover:text-rose-400 p-1.5 transition" title="Xóa file này">
+            <i class="fa-solid fa-xmark text-sm"></i>
+          </button>
+        </div>
+      `).join('');
+    }
+
+    async function submitFilesUpload() {
+      if (appState.selectedFiles.length === 0) {
+        alert('Vui lòng chọn hoặc kéo thả ít nhất 1 tệp tài liệu!');
+        return;
+      }
+
       const pBox = document.getElementById('uploadProgressBox');
-      pBox.classList.remove('hidden');
+      const stageText = document.getElementById('uploadStageText');
+      const startBtn = document.getElementById('startUploadBtn');
+
+      if (pBox) pBox.classList.remove('hidden');
+      if (startBtn) startBtn.disabled = true;
+
+      const fileCount = appState.selectedFiles.length;
+      if (stageText) {
+        stageText.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang tải lên và bóc tách ${fileCount} tài liệu...`;
+      }
 
       const formData = new FormData();
-      formData.append('file', file);
+      appState.selectedFiles.forEach(file => {
+        formData.append('files', file);
+      });
+      // Tương thích ngược nếu chỉ có 1 file
+      if (fileCount === 1) {
+        formData.append('file', appState.selectedFiles[0]);
+      }
 
       try {
+        console.log('[Upload] Bắt đầu gửi POST /api/documents/upload với', fileCount, 'tệp...');
         const res = await fetch('/api/documents/upload', {
           method: 'POST',
           body: formData
         });
         if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.detail || 'Lỗi bóc tách tài liệu');
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || 'Lỗi bóc tách tài liệu từ máy chủ');
         }
 
         const data = await res.json();
+        console.log('[Upload] Thành công:', data);
         appState.docId = data.document_id;
         appState.docTitle = data.title;
 
         // Cập nhật giao diện phòng chờ Lobby
-        document.getElementById('lobbyDocTitle').innerText = data.title;
-        document.getElementById('lobbyChunkBadge').innerText = `${data.total_chunks} Chunks`;
+        const lobbyTitleEl = document.getElementById('lobbyDocTitle');
+        const lobbyChunkEl = document.getElementById('lobbyChunkBadge');
+        const lobbyBloomEl = document.getElementById('lobbyBloomBadge');
+
+        if (lobbyTitleEl) lobbyTitleEl.innerText = data.title;
+        if (lobbyChunkEl) lobbyChunkEl.innerText = `${data.total_chunks} Chunks`;
         
         const b = data.bloom_taxonomy_counts || {};
-        document.getElementById('lobbyBloomBadge').innerText = `Bloom: ${b.REMEMBER || 0} Nhận biết, ${b.UNDERSTAND || 0} Thông hiểu, ${b.APPLY || 0} Vận dụng, ${b.ANALYZE_EVALUATE || 0} Phản biện`;
+        if (lobbyBloomEl) {
+          lobbyBloomEl.innerText = `Bloom: ${b.REMEMBER || 0} Nhận biết, ${b.UNDERSTAND || 0} Thông hiểu, ${b.APPLY || 0} Vận dụng, ${b.ANALYZE_EVALUATE || 0} Phản biện`;
+        }
 
         // Xử lý Fast-Import nếu là bộ đề Markdown có sẵn
         const fastBanner = document.getElementById('fastImportBanner');
@@ -994,10 +1196,11 @@
         const topicSelect = document.getElementById('topicFilterSelect');
 
         if (data.is_direct_quiz) {
-          fastBanner.classList.remove('hidden');
-          document.getElementById('fastImportCount').innerText = data.total_quiz_questions;
+          if (fastBanner) fastBanner.classList.remove('hidden');
+          const fastCountEl = document.getElementById('fastImportCount');
+          if (fastCountEl) fastCountEl.innerText = data.total_quiz_questions;
           
-          if (data.topics && data.topics.length > 0) {
+          if (data.topics && data.topics.length > 0 && topicSelect && topicSection) {
             topicSelect.innerHTML = '<option value="ALL">Toàn bộ các phần trong bộ đề (' + data.total_quiz_questions + ' câu)</option>';
             data.topics.forEach(top => {
               const opt = document.createElement('option');
@@ -1006,22 +1209,102 @@
               topicSelect.appendChild(opt);
             });
             topicSection.classList.remove('hidden');
-          } else {
+          } else if (topicSection) {
             topicSection.classList.add('hidden');
           }
         } else {
-          fastBanner.classList.add('hidden');
-          topicSection.classList.add('hidden');
+          if (fastBanner) fastBanner.classList.add('hidden');
+          if (topicSection) topicSection.classList.add('hidden');
         }
 
-        document.getElementById('uploadScreen').classList.add('hidden');
-        document.getElementById('lobbyScreen').classList.remove('hidden');
-        document.getElementById('viewConceptMapBtn').classList.remove('hidden');
+        const uploadScreen = document.getElementById('uploadScreen');
+        const lobbyScreen = document.getElementById('lobbyScreen');
+        const conceptBtn = document.getElementById('viewConceptMapBtn');
+
+        if (uploadScreen) uploadScreen.classList.add('hidden');
+        if (lobbyScreen) lobbyScreen.classList.remove('hidden');
+        if (conceptBtn) conceptBtn.classList.remove('hidden');
 
       } catch (err) {
-        alert('Lỗi: ' + err.message);
-        pBox.classList.add('hidden');
+        console.error('[Upload] Lỗi:', err);
+        alert('Lỗi nạp tài liệu: ' + err.message);
+        if (pBox) pBox.classList.add('hidden');
+      } finally {
+        if (startBtn) startBtn.disabled = false;
       }
+    }
+
+    // Khởi tạo các sự kiện Upload & Kéo thả
+    function initUploadEvents() {
+      const fileInput = document.getElementById('fileInput');
+      const dropZone = document.getElementById('dropZone');
+      if (!fileInput || !dropZone) return;
+
+      // Click vào dropZone thì kích hoạt fileInput.click() nếu không click trực tiếp vào fileInput
+      dropZone.onclick = (e) => {
+        if (e.target !== fileInput) {
+          fileInput.click();
+        }
+      };
+
+      ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.add('border-cyan-400', 'bg-cyan-950/30');
+        });
+        fileInput.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.add('border-cyan-400', 'bg-cyan-950/30');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.remove('border-cyan-400', 'bg-cyan-950/30');
+        });
+        fileInput.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropZone.classList.remove('border-cyan-400', 'bg-cyan-950/30');
+        });
+      });
+
+      const handleFiles = (fileList) => {
+        if (!fileList || fileList.length === 0) return;
+        addFilesToQueue(Array.from(fileList), true);
+      };
+
+      dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          handleFiles(e.dataTransfer.files);
+        }
+      });
+
+      fileInput.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          handleFiles(e.dataTransfer.files);
+        }
+      });
+
+      fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+          handleFiles(e.target.files);
+        }
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initUploadEvents);
+    } else {
+      initUploadEvents();
     }
 
     // CHỌN CHẾ ĐỘ THI ĐẤU HOẶC LUYỆN TẬP HOẶC MULTIPLAYER
@@ -1192,12 +1475,20 @@
       appState.starOfHopeActivated = false;
       appState.hintsUsedThisQuestion = 0;
 
-      // Ẩn hộp gợi ý
+      // Ẩn hộp gợi ý, feedback và modal tổng kết
       document.getElementById('hintDisplayBox').classList.add('hidden');
       document.getElementById('feedbackBox').classList.add('hidden');
+      document.getElementById('round1SummaryModal').classList.add('hidden');
 
       const round = appState.rounds[appState.currentRoundIndex];
       const question = round.questions[appState.currentQuestionIndex];
+
+      // Nếu đang thi Vòng 1 Solo: Ẩn điểm để bảo đảm cơ chế Thi Mù
+      if (round.round_number === 1 && appState.matchMode === 'ARENA_COMPETITION') {
+        document.getElementById('hudScore').innerText = '???';
+      } else {
+        document.getElementById('hudScore').innerText = appState.totalScore;
+      }
 
       document.getElementById('hudRoundName').innerText = `Vòng ${round.round_number}: ${round.round_name}`;
       document.getElementById('roundBadge').innerText = `VÒNG ${round.round_number}`;
@@ -1372,11 +1663,29 @@
       clearInterval(appState.timerInterval);
       const timeTaken = appState.totalTimeLimit - Math.max(0, appState.secondsLeft);
 
+      // Khóa ngay lập tức tất cả các nút đáp án để chống bấm đúp
       const btns = document.querySelectorAll('#optionsContainer button');
-      btns.forEach(b => b.disabled = true);
+      btns.forEach(b => {
+        b.disabled = true;
+        b.classList.add('cursor-not-allowed');
+      });
 
       // Nếu đang ở Chế độ Multiplayer -> Gửi qua WebSocket
       if (appState.matchMode === 'MULTIPLAYER_ARENA') {
+        const q = appState.mpCurrentSafeQuestion;
+        const isR1 = (q && q.round_number === 1);
+        if (isR1) {
+          // Vòng 1 Multiplayer: Chỉ đánh dấu trung tính phương án đã chọn
+          btns.forEach(b => {
+            if (b.innerText.includes(answer)) {
+              b.className = 'w-full text-left p-4 rounded-xl bg-blue-950/70 border-2 border-blue-400 text-blue-100 flex items-start space-x-3 shadow-lg';
+              const badge = b.querySelector('span:first-child');
+              if (badge) badge.className = 'w-6 h-6 rounded-lg bg-blue-500 text-white font-bold flex items-center justify-center text-xs';
+            } else {
+              b.classList.add('opacity-40');
+            }
+          });
+        }
         if (appState.mpSocket && appState.mpSocket.readyState === WebSocket.OPEN) {
           appState.mpSocket.send(JSON.stringify({
             action: 'SUBMIT_ANSWER',
@@ -1389,6 +1698,20 @@
 
       const round = appState.rounds[appState.currentRoundIndex];
       const question = round.questions[appState.currentQuestionIndex];
+      const isRound1Blind = (appState.matchMode === 'ARENA_COMPETITION' && round.round_number === 1);
+
+      if (isRound1Blind) {
+        // Vòng 1 Solo: Đánh dấu trung tính phương án đã chọn, TUYỆT ĐỐI không lộ đáp án đúng
+        btns.forEach(b => {
+          if (b.innerText.includes(answer)) {
+            b.className = 'w-full text-left p-4 rounded-xl bg-blue-950/70 border-2 border-blue-400 text-blue-100 flex items-start space-x-3 shadow-lg';
+            const badge = b.querySelector('span:first-child');
+            if (badge) badge.className = 'w-6 h-6 rounded-lg bg-blue-500 text-white font-bold flex items-center justify-center text-xs';
+          } else {
+            b.classList.add('opacity-40');
+          }
+        });
+      }
 
       const payload = {
         session_id: appState.sessionId,
@@ -1409,7 +1732,27 @@
         });
 
         const feedback = await res.json();
-        showFeedback(feedback, answer);
+
+        if (isRound1Blind) {
+          // Lưu vào lịch sử đối chiếu Vòng 1
+          appState.round1ScoreAccumulated += feedback.total_delta_score;
+          if (!appState.round1ReviewData) appState.round1ReviewData = [];
+          appState.round1ReviewData.push({
+            stt: appState.currentQuestionIndex + 1,
+            question_id: question.question_id,
+            prompt: question.prompt,
+            user_answer: answer,
+            is_correct: feedback.is_correct,
+            correct_answer: feedback.correct_answer,
+            explanation: feedback.explanation,
+            delta_score: feedback.total_delta_score,
+            time_expired: feedback.time_expired
+          });
+          // Chuyển nhanh sau 1.2s không lộ đúng sai
+          startAutoAdvance(1.2, "Đã ghi nhận! Chuyển tiếp sau");
+        } else {
+          showFeedback(feedback, answer);
+        }
 
       } catch (err) {
         console.error(err);
@@ -1417,7 +1760,7 @@
     }
 
     // AUTO-ADVANCE VÀ CHỦ ĐỀ LUYỆN TẬP DOJO
-    function startAutoAdvance(seconds = 2.0) {
+    function startAutoAdvance(seconds = 5.0, label = "Tự động chuyển sang câu tiếp theo sau") {
       clearAutoAdvance();
       const ticker = document.getElementById('autoAdvanceTicker');
       const textEl = document.getElementById('autoAdvanceText');
@@ -1425,7 +1768,7 @@
       ticker.classList.remove('hidden');
 
       let left = seconds;
-      textEl.innerText = `Tự động chuyển câu sau ${left.toFixed(1)}s...`;
+      textEl.innerText = `${label} ${left.toFixed(1)}s...`;
 
       appState.autoAdvanceInterval = setInterval(() => {
         left -= 0.5;
@@ -1435,7 +1778,7 @@
             nextQuestion();
           }
         } else {
-          textEl.innerText = `Tự động chuyển câu sau ${left.toFixed(1)}s...`;
+          textEl.innerText = `${label} ${left.toFixed(1)}s...`;
         }
       }, 500);
     }
@@ -1564,6 +1907,23 @@
         fDelta.innerHTML = `<span class="text-red-400">${fb.total_delta_score} điểm</span> (Đáp án đúng: <b class="text-white">${fb.correct_answer}</b>)`;
       }
 
+      // Tô màu các button: Đáp án đúng -> xanh lá, Đáp án sai chọn -> đỏ
+      const optButtons = document.querySelectorAll('#optionsContainer button');
+      optButtons.forEach(btn => {
+        const text = btn.innerText;
+        if (text.includes(fb.correct_answer)) {
+          btn.className = 'w-full text-left p-4 rounded-xl bg-emerald-950/80 border-2 border-emerald-500 text-white flex items-start space-x-3 shadow-lg';
+          const badge = btn.querySelector('span:first-child');
+          if (badge) badge.className = 'w-6 h-6 rounded-lg bg-emerald-500 text-black font-black flex items-center justify-center text-xs';
+        } else if (userAns && text.includes(userAns) && !fb.is_correct) {
+          btn.className = 'w-full text-left p-4 rounded-xl bg-red-950/80 border-2 border-red-500 text-white flex items-start space-x-3 shadow-lg';
+          const badge = btn.querySelector('span:first-child');
+          if (badge) badge.className = 'w-6 h-6 rounded-lg bg-red-500 text-white font-black flex items-center justify-center text-xs';
+        } else {
+          btn.classList.add('opacity-40');
+        }
+      });
+
       document.getElementById('feedbackExplanation').innerText = fb.explanation;
 
       // Render từng bước suy luận
@@ -1582,14 +1942,13 @@
         practiceBtns.classList.add('hidden');
       }
 
-      // Tự động chuyển câu nếu hết thời gian ở chế độ Thi đấu Solo
-      if (appState.matchMode === 'ARENA_COMPETITION' && fb.time_expired) {
-        startAutoAdvance(2.0);
-      }
+      // Tự động chuyển câu sau 5 giây (Vòng 2, 3, 4 và Luyện tập)
+      startAutoAdvance(5.0, "Tự động chuyển sang câu tiếp theo sau");
     }
 
     // LÀM LẠI CÂU HỎI
     function retryCurrentQuestion() {
+      clearAutoAdvance();
       renderCurrentQuestion();
     }
 
@@ -1621,6 +1980,13 @@
       }
 
       const round = appState.rounds[appState.currentRoundIndex];
+
+      // KIỂM TRA: Vừa kết thúc câu hỏi cuối cùng của Vòng 1 (Khởi động) ở chế độ Thi đấu Solo!
+      if (round.round_number === 1 && appState.matchMode === 'ARENA_COMPETITION' && (appState.currentQuestionIndex + 1 >= round.questions.length)) {
+        showRound1SummarySolo();
+        return;
+      }
+
       appState.currentQuestionIndex++;
 
       if (appState.currentQuestionIndex < round.questions.length) {
@@ -1636,6 +2002,80 @@
           finishMatch();
         }
       }
+    }
+
+    // MÀN HÌNH TỔNG KẾT VÒNG 1 (SOLO ARENA)
+    function showRound1SummarySolo() {
+      clearAutoAdvance();
+      clearInterval(appState.timerInterval);
+
+      // Cập nhật điểm HUD và màn hình tổng kết sau Vòng 1
+      document.getElementById('hudScore').innerText = appState.round1ScoreAccumulated;
+      document.getElementById('r1SummaryTotalScore').innerText = appState.round1ScoreAccumulated;
+      document.getElementById('r1SummaryMpLeaderboard').classList.add('hidden');
+
+      const tbody = document.getElementById('r1SummaryTableBody');
+      tbody.innerHTML = (appState.round1ReviewData || []).map(item => `
+        <tr class="hover:bg-slate-800/40 transition">
+          <td class="p-3 text-center font-bold text-slate-400 font-mono">${item.stt}</td>
+          <td class="p-3 font-medium text-slate-200 leading-snug">${item.prompt}</td>
+          <td class="p-3 font-mono font-semibold">
+            ${item.time_expired ? '<span class="text-amber-400 bg-amber-950/60 px-2 py-1 rounded border border-amber-500/40">⏱️ Hết giờ</span>' :
+              item.is_correct ? `<span class="text-emerald-400 bg-emerald-950/60 px-2 py-1 rounded border border-emerald-500/40">✅ ${item.user_answer}</span>` :
+              `<span class="text-red-400 bg-red-950/60 px-2 py-1 rounded border border-red-500/40">❌ ${item.user_answer}</span>`}
+          </td>
+          <td class="p-3 font-mono font-bold text-emerald-300">
+            <span class="bg-emerald-950/40 px-2 py-1 rounded border border-emerald-600/30">${item.correct_answer}</span>
+          </td>
+          <td class="p-3 text-[11px] text-slate-400 italic leading-relaxed">${item.explanation || '—'}</td>
+        </tr>
+      `).join('');
+
+      const btn = document.getElementById('btnContinueRound2');
+      btn.disabled = false;
+      btn.innerHTML = 'TIẾP TỤC SANG VÒNG 2 <i class="fa-solid fa-arrow-right ml-1.5"></i>';
+      btn.className = 'px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-black text-xs uppercase tracking-wider shadow-lg transition';
+
+      document.getElementById('round1SummaryModal').classList.remove('hidden');
+      startRound1SummaryCountdown(15.0);
+    }
+
+    function continueToRound2() {
+      clearInterval(appState.r1SummaryInterval);
+      document.getElementById('round1SummaryModal').classList.add('hidden');
+
+      if (appState.matchMode === 'MULTIPLAYER_ARENA') {
+        if (appState.mpIsHost && appState.mpSocket && appState.mpSocket.readyState === WebSocket.OPEN) {
+          appState.mpSocket.send(JSON.stringify({ action: 'CONTINUE_ROUND_2' }));
+        }
+        return;
+      }
+
+      // Solo Arena: Chuyển sang Vòng 2
+      appState.currentRoundIndex = 1;
+      appState.currentQuestionIndex = 0;
+      if (appState.currentRoundIndex < appState.rounds.length) {
+        renderCurrentQuestion();
+      } else {
+        finishMatch();
+      }
+    }
+
+    function startRound1SummaryCountdown(seconds = 15.0) {
+      clearInterval(appState.r1SummaryInterval);
+      let left = seconds;
+      const textEl = document.getElementById('r1CountdownText');
+      if (textEl) textEl.innerText = `Tự động chuyển sang Vòng 2 sau ${Math.ceil(left)}s...`;
+
+      appState.r1SummaryInterval = setInterval(() => {
+        left -= 1;
+        if (left <= 0) {
+          clearInterval(appState.r1SummaryInterval);
+          continueToRound2();
+        } else if (textEl) {
+          textEl.innerText = `Tự động chuyển sang Vòng 2 sau ${Math.ceil(left)}s...`;
+        }
+      }, 1000);
     }
 
     function renderObstacleLetters(len) {
@@ -1894,32 +2334,55 @@
       const wsUrl = `${protocol}//${window.location.host}/api/multiplayer/ws/${appState.mpRoomCode}/${appState.mpPlayerId}`;
 
       if (appState.mpSocket) {
-        try { appState.mpSocket.close(); } catch (e) {}
+        try {
+          appState.mpSocket.onclose = null;
+          appState.mpSocket.onerror = null;
+          appState.mpSocket.close();
+        } catch (e) {}
       }
 
-      const socket = new WebSocket(wsUrl);
-      appState.mpSocket = socket;
+      appState.mpReconnectAttempts = appState.mpReconnectAttempts || 0;
 
-      socket.onopen = () => {
-        console.log('[Multiplayer] WebSocket đã kết nối thành công tới phòng', appState.mpRoomCode);
-      };
+      try {
+        const socket = new WebSocket(wsUrl);
+        appState.mpSocket = socket;
 
-      socket.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          handleMultiplayerMessage(msg);
-        } catch (e) {
-          console.error('[Multiplayer] Lỗi parse WS message:', e);
-        }
-      };
+        socket.onopen = () => {
+          appState.mpReconnectAttempts = 0;
+          console.log('[Multiplayer] WebSocket đã kết nối thành công tới phòng', appState.mpRoomCode);
+        };
 
-      socket.onclose = () => {
-        console.log('[Multiplayer] WebSocket bị đóng.');
-      };
+        socket.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            handleMultiplayerMessage(msg);
+          } catch (e) {
+            console.error('[Multiplayer] Lỗi parse WS message:', e);
+          }
+        };
 
-      socket.onerror = (e) => {
-        console.error('[Multiplayer] WebSocket lỗi:', e);
-      };
+        socket.onclose = (ev) => {
+          console.log('[Multiplayer] WebSocket bị đóng.', ev.code, ev.reason);
+          // Không tự động reconnect nếu bị từ chối quyền (4003, 4004, 1008) hoặc đã kết thúc bình thường (1000)
+          if (ev.code === 4003 || ev.code === 4004 || ev.code === 1000 || ev.code === 1008) return;
+          if (appState.mpReconnectAttempts < 3 && appState.mpRoomCode && appState.mpPlayerId) {
+            appState.mpReconnectAttempts++;
+            const delay = Math.min(1000 * Math.pow(2, appState.mpReconnectAttempts - 1), 4000);
+            console.log(`[Multiplayer] Thử kết nối lại lần ${appState.mpReconnectAttempts} sau ${delay}ms...`);
+            setTimeout(() => {
+              if (appState.mpRoomCode && appState.mpPlayerId && (!appState.mpSocket || appState.mpSocket.readyState !== WebSocket.OPEN)) {
+                connectMultiplayerWebSocket();
+              }
+            }, delay);
+          }
+        };
+
+        socket.onerror = (e) => {
+          console.warn('[Multiplayer] WebSocket gặp sự cố:', e);
+        };
+      } catch (err) {
+        console.warn('[Multiplayer] Lỗi khởi tạo WebSocket:', err);
+      }
     }
 
     function handleMultiplayerMessage(msg) {
@@ -1948,6 +2411,10 @@
 
         case 'STAR_OF_HOPE_TOGGLED':
           showMpStarToast(data.nickname, data.is_activated);
+          break;
+
+        case 'ROUND_1_SUMMARY':
+          renderMultiplayerRound1Summary(data);
           break;
 
         case 'MATCH_FINISHED':
@@ -2005,8 +2472,10 @@
       clearInterval(appState.timerInterval);
       appState.starOfHopeActivated = false;
 
-      // Ẩn sảnh chờ, hiện màn hình thi đấu
+      // Ẩn sảnh chờ và modal tổng kết V1, hiện màn hình thi đấu
       document.getElementById('multiplayerLobbyScreen').classList.add('hidden');
+      document.getElementById('round1SummaryModal').classList.add('hidden');
+      clearInterval(appState.r1SummaryInterval);
       document.getElementById('stageScreen').classList.remove('hidden');
       document.getElementById('liveHUD').classList.remove('hidden');
       document.getElementById('mpMiniLeaderboard').classList.remove('hidden');
@@ -2072,8 +2541,16 @@
     function renderMultiplayerQuestionResult(data) {
       clearInterval(appState.timerInterval);
 
+      if (data.is_blind) {
+        // VÒNG 1: THI MÙ - KHÔNG LỘ ĐÁP ÁN ĐÚNG/SAI
+        // Tự động chuyển câu nhanh sau 1.5s
+        document.getElementById('feedbackBox').classList.add('hidden');
+        startAutoAdvance(data.auto_advance_seconds || 1.5, "Đã ghi nhận toàn phòng! Chuyển tiếp sau");
+        return;
+      }
+
       if (data.auto_advance_seconds) {
-        startAutoAdvance(data.auto_advance_seconds);
+        startAutoAdvance(data.auto_advance_seconds || 5.0, "Tự động chuyển sang câu tiếp theo sau");
       }
 
       if (data.leaderboard) {
@@ -2087,6 +2564,23 @@
       }
 
       const myAns = data.answers_summary ? data.answers_summary[appState.mpPlayerId] : null;
+
+      // Tô màu các button: Đáp án đúng -> xanh lá, Đáp án sai đã chọn -> đỏ
+      const optButtons = document.querySelectorAll('#optionsContainer button');
+      optButtons.forEach(btn => {
+        const text = btn.innerText;
+        if (text.includes(data.correct_answer)) {
+          btn.className = 'w-full text-left p-4 rounded-xl bg-emerald-950/80 border-2 border-emerald-500 text-white flex items-start space-x-3 shadow-lg';
+          const badge = btn.querySelector('span:first-child');
+          if (badge) badge.className = 'w-6 h-6 rounded-lg bg-emerald-500 text-black font-black flex items-center justify-center text-xs';
+        } else if (myAns && text.includes(myAns.user_answer) && !myAns.is_correct) {
+          btn.className = 'w-full text-left p-4 rounded-xl bg-red-950/80 border-2 border-red-500 text-white flex items-start space-x-3 shadow-lg';
+          const badge = btn.querySelector('span:first-child');
+          if (badge) badge.className = 'w-6 h-6 rounded-lg bg-red-500 text-white font-black flex items-center justify-center text-xs';
+        } else {
+          btn.classList.add('opacity-40');
+        }
+      });
 
       const fBox = document.getElementById('feedbackBox');
       const fTitle = document.getElementById('feedbackTitle');
@@ -2127,6 +2621,73 @@
         nextBtn.disabled = true;
         nextBtn.className = 'ml-auto bg-slate-800 text-slate-400 font-bold text-xs px-5 py-2.5 rounded-lg cursor-not-allowed';
       }
+    }
+
+    // HIỂN THỊ BẢNG TỔNG KẾT VÒNG 1 (MULTIPLAYER)
+    function renderMultiplayerRound1Summary(data) {
+      clearInterval(appState.timerInterval);
+      clearAutoAdvance();
+
+      if (data.leaderboard) {
+        renderMultiplayerLeaderboard(data.leaderboard);
+        const me = data.leaderboard.find(p => p.player_id === appState.mpPlayerId);
+        if (me) {
+          document.getElementById('hudScore').innerText = me.total_score;
+          document.getElementById('r1SummaryTotalScore').innerText = me.total_score;
+        }
+
+        const mpLb = document.getElementById('r1SummaryMpLeaderboard');
+        const rowsContainer = document.getElementById('r1MpLeaderboardRows');
+        if (mpLb && rowsContainer) {
+          mpLb.classList.remove('hidden');
+          rowsContainer.innerHTML = data.leaderboard.map(p => `
+            <div class="p-2.5 rounded-lg bg-arena-900 border ${p.player_id === appState.mpPlayerId ? 'border-purple-500 bg-purple-950/30' : 'border-slate-700'} flex items-center justify-between text-xs">
+              <span class="font-bold text-slate-200">${p.rank}. ${p.nickname}</span>
+              <span class="font-mono font-bold text-amber-400">${p.total_score}đ</span>
+            </div>
+          `).join('');
+        }
+      }
+
+      const tbody = document.getElementById('r1SummaryTableBody');
+      tbody.innerHTML = (data.summary_table || []).map(row => {
+        const myRes = row.player_results ? row.player_results[appState.mpPlayerId] : null;
+        let ansBadge = '<span class="text-slate-500 italic">Chưa nộp</span>';
+        if (myRes) {
+          if (myRes.time_expired) {
+            ansBadge = '<span class="text-amber-400 bg-amber-950/60 px-2 py-1 rounded border border-amber-500/40">⏱️ Hết giờ</span>';
+          } else if (myRes.is_correct) {
+            ansBadge = `<span class="text-emerald-400 bg-emerald-950/60 px-2 py-1 rounded border border-emerald-500/40">✅ ${myRes.user_answer}</span>`;
+          } else {
+            ansBadge = `<span class="text-red-400 bg-red-950/60 px-2 py-1 rounded border border-red-500/40">❌ ${myRes.user_answer}</span>`;
+          }
+        }
+        return `
+          <tr class="hover:bg-slate-800/40 transition">
+            <td class="p-3 text-center font-bold text-slate-400 font-mono">${row.stt}</td>
+            <td class="p-3 font-medium text-slate-200 leading-snug">${row.question_text}</td>
+            <td class="p-3 font-mono font-semibold">${ansBadge}</td>
+            <td class="p-3 font-mono font-bold text-emerald-300">
+              <span class="bg-emerald-950/40 px-2 py-1 rounded border border-emerald-600/30">${row.correct_answer}</span>
+            </td>
+            <td class="p-3 text-[11px] text-slate-400 italic leading-relaxed">${row.explanation || '—'}</td>
+          </tr>
+        `;
+      }).join('');
+
+      const btn = document.getElementById('btnContinueRound2');
+      if (appState.mpIsHost) {
+        btn.disabled = false;
+        btn.innerHTML = 'TIẾP TỤC SANG VÒNG 2 (CHỦ PHÒNG) <i class="fa-solid fa-arrow-right ml-1.5"></i>';
+        btn.className = 'px-6 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-400 hover:to-pink-500 text-white font-black text-xs uppercase tracking-wider shadow-lg transition';
+      } else {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-hourglass-half fa-spin mr-1.5"></i> Chờ Chủ phòng bắt đầu Vòng 2...';
+        btn.className = 'px-6 py-2.5 rounded-xl bg-slate-800 text-slate-400 font-bold text-xs uppercase tracking-wider cursor-not-allowed';
+      }
+
+      document.getElementById('round1SummaryModal').classList.remove('hidden');
+      startRound1SummaryCountdown(data.auto_advance_seconds || 15.0);
     }
 
     function showMpStarToast(nickname, isActivated) {
