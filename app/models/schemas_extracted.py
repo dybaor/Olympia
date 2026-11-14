@@ -59,3 +59,7 @@ class ExtractedKnowledgeBundle(BaseModel):
     detected_topics: List[str] = Field(default_factory=list)
     chunks: List[ChunkMetadata] = Field(default_factory=list)
     concept_map: ConceptMap
+    is_direct_quiz: bool = False
+    direct_quiz_questions_json: Optional[str] = None
+    direct_quiz_topics: List[str] = Field(default_factory=list)
+    total_direct_questions: int = 0

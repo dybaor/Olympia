@@ -67,6 +67,10 @@ def clean_and_validate_term(raw_term: str, original_text: str = "") -> Optional[
     if lower_cleaned in VIETNAMESE_STOPWORDS:
         return None
 
+    # Lọc bỏ hoàn toàn các tiêu đề cấu trúc như 'Câu 181', 'Phần 1', 'Chương 2'
+    if re.match(r'^(câu|phần|chương|bài|mục|đáp án|giải thích)\s*\d*', lower_cleaned):
+        return None
+
     if len(term) < 2 or len(term) > 60:
         return None
 
@@ -397,6 +401,22 @@ class KnowledgeGraphExtractor:
 
     def process_document(self, file_path: str, doc_id: str = None) -> ExtractedKnowledgeBundle:
         doc_id = doc_id or f"DOC_{uuid.uuid4().hex[:8]}"
+
+        # TỰ ĐỘNG PHÁT HIỆN & KHÓA LUỒNG CHO BỘ ĐỀ TRẮC NGHIỆM MARKDOWN NGUYÊN BẢN
+        ext = Path(file_path).suffix.lower()
+        if ext in [".md", ".txt"]:
+            try:
+                content = Path(file_path).read_text(encoding="utf-8")
+                from app.services.md_quiz_parser import DirectMDQuizParser
+                if DirectMDQuizParser.is_markdown_quiz(content):
+                    return DirectMDQuizParser.build_knowledge_bundle(
+                        content=content,
+                        doc_id=doc_id,
+                        doc_title=Path(file_path).name
+                    )
+            except Exception:
+                pass
+
         title, _, sections = self.parse_file(file_path)
         chunks = self.semantic_chunking(sections)
         concept_map = self.extract_concept_map(chunks, title)

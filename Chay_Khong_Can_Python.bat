@@ -11,12 +11,12 @@ echo.
 
 start http://localhost:8000
 
-if exist "dist\OlympicArena\OlympicArena.exe" (
+if exist "dist\Olympic_Portable\Olympic_Portable.exe" (
+    cd /d "%~dp0dist\Olympic_Portable"
+    Olympic_Portable.exe
+) else if exist "dist\OlympicArena\OlympicArena.exe" (
     cd /d "%~dp0dist\OlympicArena"
     OlympicArena.exe
-) else if exist "dist\ArenaOlympic\ArenaOlympic.exe" (
-    cd /d "%~dp0dist\ArenaOlympic"
-    ArenaOlympic.exe
 ) else (
     echo [ERROR] Khong tim thay file thuc thi Portable!
     pause

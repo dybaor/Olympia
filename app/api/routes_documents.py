@@ -10,6 +10,7 @@ from app.core.config import UPLOAD_DIR
 from app.core.database import get_db, DocumentModel, ExamModel
 from app.skills.doc_parser import KnowledgeGraphExtractor
 from app.services.swarm_orchestrator import SwarmOrchestrator
+from app.services.md_quiz_parser import DirectMDQuizParser
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 extractor = KnowledgeGraphExtractor()
@@ -22,8 +23,9 @@ async def upload_document(
 ):
     """
     Tải lên tài liệu (PDF, DOCX, MD, TXT):
-    Agent 1 (Knowledge_Graph_Extractor) chạy ngay lập tức để trích xuất tri thức & phân tầng Bloom.
-    Lưu trữ và mở phòng cấu hình (Match Lobby) để người dùng chọn chế độ & độ khó.
+    - Tự động nhận diện cấu trúc đề trắc nghiệm Markdown (Direct_MD_Quiz_Parser).
+    - Nếu là file trắc nghiệm chuẩn: Chuyển sang Fast-Import tức thì, 100% chính xác, không gọi LLM.
+    - Nếu là tài liệu lý thuyết: Kích hoạt Agent 1 phân tầng nhận thức Bloom như cũ.
     """
     ext = Path(file.filename).suffix.lower()
     if ext not in [".pdf", ".docx", ".md", ".txt"]:
@@ -39,8 +41,29 @@ async def upload_document(
         shutil.copyfileobj(file.file, buffer)
 
     try:
-        # Kích hoạt Agent 1: Bóc tách tri thức & phân tầng Bloom
-        bundle = extractor.process_document(str(file_save_path), doc_id=doc_id)
+        # XÓA BỘ ĐỀ VÀ KẾT QUẢ CŨ CÙNG TÊN ĐỂ TRÁNH DỮ LIỆU CACHE CŨ
+        old_docs = db.query(DocumentModel).filter(DocumentModel.title == file.filename).all()
+        for od in old_docs:
+            db.query(ExamModel).filter(ExamModel.document_id == od.id).delete()
+            db.delete(od)
+        db.commit()
+
+        # KIỂM TRA TỰ ĐỘNG: Có phải file Markdown bộ đề trắc nghiệm sẵn không?
+        is_direct_md = False
+        if ext in [".md", ".txt"]:
+            content = file_save_path.read_text(encoding="utf-8")
+            if DirectMDQuizParser.is_markdown_quiz(content):
+                is_direct_md = True
+                # KHÓA HOÀN TOÀN LUỒNG EXTRACTOR/GENERATOR: Chỉ nạp 100% câu hỏi gốc
+                bundle = DirectMDQuizParser.build_knowledge_bundle(
+                    content=content,
+                    doc_id=doc_id,
+                    doc_title=file.filename
+                )
+
+        if not is_direct_md:
+            # Kích hoạt Agent 1: Bóc tách tri thức & phân tầng Bloom thông thường cho tài liệu lý thuyết
+            bundle = extractor.process_document(str(file_save_path), doc_id=doc_id)
 
         # Lưu Document vào Database
         doc_record = DocumentModel(
@@ -69,6 +92,9 @@ async def upload_document(
             "status": "success",
             "document_id": doc_id,
             "title": bundle.document_title,
+            "is_direct_quiz": bundle.is_direct_quiz,
+            "total_quiz_questions": bundle.total_direct_questions if bundle.is_direct_quiz else 0,
+            "topics": bundle.direct_quiz_topics if bundle.is_direct_quiz else bundle.detected_topics,
             "total_chunks": bundle.total_chunks,
             "bloom_taxonomy_counts": bloom_counts,
             "concept_counts": {

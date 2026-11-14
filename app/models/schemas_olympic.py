@@ -57,11 +57,13 @@ class RoundConfig(BaseModel):
     round_number: int = Field(..., ge=1, le=4)
     difficulty: DifficultyLevel = "MEDIUM"
     time_limit_sec: int = Field(default=20, ge=5, le=120)
-    question_count: int = Field(default=4, ge=2, le=15)
+    question_count: int = Field(default=4, ge=1, le=100)
 
 class UserMatchConfig(BaseModel):
     match_mode: MatchMode = "ARENA_COMPETITION"
     practice_filter: PracticeFilter = "ALL_ROUNDS"
+    topic_filter: Optional[str] = Field(default=None, description="Lọc theo Chương/Phần cụ thể hoặc ALL")
+    practice_order: Optional[str] = Field(default="sequential", description="Thứ tự luyện tập: sequential hoặc random")
     round_configs: List[RoundConfig] = Field(
         default_factory=lambda: [
             RoundConfig(round_number=1, difficulty="MEDIUM", time_limit_sec=15, question_count=8),

@@ -28,7 +28,23 @@ class SwarmOrchestrator:
         cfg = match_config or UserMatchConfig()
         cfg_map: Dict[int, RoundConfig] = {rc.round_number: rc for rc in cfg.round_configs}
 
-        # BƯỚC 1: Kích hoạt Agent 1 bóc tách tri thức & phân tầng Bloom
+        # BƯỚC 1: Kiểm tra tự động Fast-Import đối với file Markdown bộ đề trắc nghiệm
+        from pathlib import Path
+        ext = Path(file_path).suffix.lower()
+        if ext in [".md", ".txt"]:
+            try:
+                from app.services.md_quiz_parser import DirectMDQuizParser
+                content = Path(file_path).read_text(encoding="utf-8")
+                if DirectMDQuizParser.is_markdown_quiz(content):
+                    knowledge_bundle = DirectMDQuizParser.build_knowledge_bundle(
+                        content, doc_id=doc_id or "DOC_MD", doc_title=Path(file_path).name
+                    )
+                    full_exam = DirectMDQuizParser.build_olympic_exam(knowledge_bundle, cfg)
+                    return knowledge_bundle, full_exam, {}
+            except Exception:
+                pass
+
+        # Kích hoạt Agent 1 bóc tách tri thức & phân tầng Bloom
         knowledge_bundle = self.parser.process_document(file_path, doc_id=doc_id)
 
         # BƯỚC 2: Khởi tạo Agent 2 và Agent 3

@@ -32,14 +32,18 @@ def create_room(req: CreateRoomRequest, db: Session = Depends(get_db)):
 
     bundle = ExtractedKnowledgeBundle.model_validate_json(doc_record.extracted_bundle_json)
 
-    # Sinh đề thi chuẩn 4 vòng theo cấu hình host
-    architect = DynamicOlympicArchitect(bundle)
-    exam = architect.generate_full_olympic_exam(req.config)
+    if bundle.is_direct_quiz:
+        from app.services.md_quiz_parser import DirectMDQuizParser
+        exam = DirectMDQuizParser.build_olympic_exam(bundle, req.config)
+    else:
+        # Sinh đề thi chuẩn 4 vòng theo cấu hình host
+        architect = DynamicOlympicArchitect(bundle)
+        exam = architect.generate_full_olympic_exam(req.config)
 
-    # Thẩm định qua Critic
-    critic = AdversarialFactChecker(bundle)
-    for r in exam.rounds:
-        critic.audit_round(r)
+        # Thẩm định qua Critic
+        critic = AdversarialFactChecker(bundle)
+        for r in exam.rounds:
+            critic.audit_round(r)
 
     room_code, host_player_id = multiplayer_manager.create_room(
         host_nickname=req.host_nickname,

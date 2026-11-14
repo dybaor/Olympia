@@ -235,6 +235,34 @@
           </label>
           <input type="text" id="hostNicknameInput" value="Chủ Phòng Olympic" placeholder="Nhập biệt danh của bạn..." class="w-full bg-arena-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-400" />
         </div>
+
+        <!-- FAST-IMPORT BADGE BANNER (Chỉ hiện khi là file trắc nghiệm Markdown sẵn) -->
+        <div id="fastImportBanner" class="hidden bg-gradient-to-r from-emerald-950/80 to-teal-950/60 border border-emerald-500/50 p-4 rounded-xl flex items-center justify-between gap-3">
+          <div class="flex items-center space-x-3">
+            <span class="text-2xl">⚡</span>
+            <div>
+              <h4 class="text-xs font-black text-emerald-300 uppercase tracking-wide flex items-center gap-1.5">
+                <span>Chế độ Fast-Import (Bộ Đề Trắc Nghiệm Markdown Sẵn)</span>
+                <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold border border-emerald-500/40">100% Chính Xác</span>
+              </h4>
+              <p class="text-[11px] text-slate-300 mt-0.5">
+                Đã nạp trực tiếp <b id="fastImportCount" class="text-amber-400 font-bold font-mono">300</b> câu hỏi kèm đáp án & lời giải nguyên bản, bỏ qua bước gọi AI.
+              </p>
+            </div>
+          </div>
+          <div class="text-right">
+            <span class="text-[10px] font-mono text-emerald-400 bg-emerald-950/80 px-2 py-1 rounded border border-emerald-700/60">0.05s Instant</span>
+          </div>
+        </div>
+
+        <!-- BỘ LỌC CHƯƠNG / PHẦN THI (Chỉ hiện khi có Topics) -->
+        <div id="topicFilterSection" class="hidden space-y-2 bg-arena-900/80 p-4 rounded-xl border border-purple-800/50">
+          <label class="text-xs font-bold text-purple-300 uppercase flex items-center gap-1.5">
+            <i class="fa-solid fa-layer-group text-purple-400"></i> Chọn Phạm Vi Chuyên Đề / Chương:
+          </label>
+          <select id="topicFilterSelect" class="w-full bg-arena-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-400">
+            <option value="ALL">Toàn bộ các phần trong bộ đề (Mặc định)</option>
+          </select>
         </div>
 
         <!-- BỘ LỌC LUYỆN TẬP (Chỉ hiện khi chọn PRACTICE_DOJO) -->
@@ -242,25 +270,32 @@
           <div>
             <label class="text-xs font-bold text-cyan-300 uppercase">Phạm Vi Luyện Tập:</label>
             <select id="practiceFilterSelect" class="w-full mt-1 bg-arena-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500">
-              <option value="ALL_ROUNDS">Luyện tập toàn bộ 4 vòng thi</option>
-              <option value="ONLY_ROUND_1">Chỉ tập trung: Vòng 1 (Khởi động - Nhận diện tốc độ)</option>
-              <option value="ONLY_ROUND_2">Chỉ tập trung: Vòng 2 (Vượt chướng ngại vật - Tư duy liên kết)</option>
-              <option value="ONLY_ROUND_3">Chỉ tập trung: Vòng 3 (Tăng tốc - Tình huống suy luận đa bước)</option>
-              <option value="ONLY_ROUND_4">Chỉ tập trung: Vòng 4 (Về đích - Phản biện & Điều kiện biên)</option>
+              <option value="ALL_ROUNDS">Luyện tập toàn bộ câu hỏi của bộ đề</option>
+              <option value="ONLY_ROUND_1">Chỉ tập trung: Nhóm Khái niệm & Nhận diện nhanh</option>
+              <option value="ONLY_ROUND_3">Chỉ tập trung: Nhóm Bài toán tính toán (CIDR, delay, thông lượng)</option>
             </select>
           </div>
-          <div class="flex items-center space-x-2 pt-1 border-t border-slate-800">
-            <input type="checkbox" id="practiceUnlimitedTime" class="w-4 h-4 rounded accent-cyan-500 cursor-pointer" />
-            <label for="practiceUnlimitedTime" class="text-xs text-cyan-200 cursor-pointer flex items-center gap-1.5 font-medium">
-              <span>Tắt giới hạn thời gian (Hiển thị vô cực <b class="text-base text-cyan-300 font-mono">∞</b>)</span>
-            </label>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-800">
+            <div class="flex items-center space-x-2">
+              <input type="checkbox" id="practiceUnlimitedTime" class="w-4 h-4 rounded accent-cyan-500 cursor-pointer" />
+              <label for="practiceUnlimitedTime" class="text-xs text-cyan-200 cursor-pointer flex items-center gap-1.5 font-medium">
+                <span>Tắt giới hạn thời gian (<b class="text-base text-cyan-300 font-mono">∞</b>)</span>
+              </label>
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-400 uppercase">Thứ tự câu hỏi:</label>
+              <select id="practiceOrderSelect" class="w-full mt-0.5 bg-arena-800 border border-slate-700 rounded px-2 py-1 text-xs text-white">
+                <option value="sequential">Tuần tự theo thứ tự câu hỏi</option>
+                <option value="random">Xáo trộn ngẫu nhiên (Shuffle)</option>
+              </select>
+            </div>
           </div>
         </div>
 
         <!-- CẤU HÌNH THỜI GIAN & ĐỘ KHÓ 4 VÒNG -->
         <div class="space-y-4">
           <div class="flex items-center justify-between">
-            <label class="text-xs font-bold uppercase tracking-wider text-slate-300">2. Tùy Chỉnh Độ Khó & Thời Gian 4 Vòng</label>
+            <label class="text-xs font-bold uppercase tracking-wider text-slate-300">2. Tùy Chỉnh Độ Khó, Thời Gian & Số Câu 4 Vòng</label>
             <span class="text-[11px] text-slate-400">Tham số hóa linh hoạt bởi Dynamic Olympic Architect</span>
           </div>
 
@@ -272,7 +307,7 @@
                 <span>VÒNG 1: KHỞI ĐỘNG</span>
                 <span class="text-slate-400 font-normal">Trắc nghiệm nhanh</span>
               </div>
-              <div class="grid grid-cols-2 gap-3 text-xs">
+              <div class="grid grid-cols-3 gap-2 text-xs">
                 <div>
                   <label class="text-slate-400 text-[10px] uppercase">Độ khó:</label>
                   <select id="diffR1" class="w-full mt-1 bg-arena-800 border border-slate-700 rounded-lg p-1.5 text-white">
@@ -283,10 +318,20 @@
                   </select>
                 </div>
                 <div>
+                  <label class="text-slate-400 text-[10px] uppercase">Số câu:</label>
+                  <select id="countR1" class="w-full mt-1 bg-arena-800 border border-slate-700 rounded-lg p-1.5 text-cyan-300 font-bold">
+                    <option value="4">4 câu</option>
+                    <option value="6">6 câu</option>
+                    <option value="8" selected>8 câu</option>
+                    <option value="10">10 câu</option>
+                    <option value="15">15 câu</option>
+                  </select>
+                </div>
+                <div>
                   <label class="text-slate-400 text-[10px] uppercase">Thời gian/câu:</label>
-                  <div class="flex items-center gap-2 mt-1">
+                  <div class="flex items-center gap-1 mt-1">
                     <input type="range" id="timeR1" min="5" max="30" value="15" oninput="document.getElementById('lblTimeR1').innerText = this.value + 's'" class="flex-1 accent-cyan-400" />
-                    <span id="lblTimeR1" class="text-cyan-400 font-mono w-8 text-right font-bold">15s</span>
+                    <span id="lblTimeR1" class="text-cyan-400 font-mono text-xs w-7 text-right font-bold">15s</span>
                   </div>
                 </div>
               </div>
@@ -298,7 +343,7 @@
                 <span>VÒNG 2: VƯỢT CHƯỚNG NGẠI VẬT</span>
                 <span class="text-slate-400 font-normal">Từ khóa ẩn</span>
               </div>
-              <div class="grid grid-cols-2 gap-3 text-xs">
+              <div class="grid grid-cols-3 gap-2 text-xs">
                 <div>
                   <label class="text-slate-400 text-[10px] uppercase">Độ khó:</label>
                   <select id="diffR2" class="w-full mt-1 bg-arena-800 border border-slate-700 rounded-lg p-1.5 text-white">
@@ -309,10 +354,19 @@
                   </select>
                 </div>
                 <div>
+                  <label class="text-slate-400 text-[10px] uppercase">Số câu:</label>
+                  <select id="countR2" class="w-full mt-1 bg-arena-800 border border-slate-700 rounded-lg p-1.5 text-cyan-300 font-bold">
+                    <option value="2">2 câu</option>
+                    <option value="4" selected>4 câu</option>
+                    <option value="6">6 câu</option>
+                    <option value="8">8 câu</option>
+                  </select>
+                </div>
+                <div>
                   <label class="text-slate-400 text-[10px] uppercase">Thời gian/câu:</label>
-                  <div class="flex items-center gap-2 mt-1">
+                  <div class="flex items-center gap-1 mt-1">
                     <input type="range" id="timeR2" min="10" max="45" value="20" oninput="document.getElementById('lblTimeR2').innerText = this.value + 's'" class="flex-1 accent-cyan-400" />
-                    <span id="lblTimeR2" class="text-cyan-400 font-mono w-8 text-right font-bold">20s</span>
+                    <span id="lblTimeR2" class="text-cyan-400 font-mono text-xs w-7 text-right font-bold">20s</span>
                   </div>
                 </div>
               </div>
@@ -322,9 +376,9 @@
             <div class="bg-arena-900 p-4 rounded-xl border border-slate-700/80 space-y-3">
               <div class="flex items-center justify-between font-bold text-xs text-orange-400">
                 <span>VÒNG 3: TĂNG TỐC</span>
-                <span class="text-slate-400 font-normal">Tình huống đa bước</span>
+                <span class="text-slate-400 font-normal">Bài toán tính toán</span>
               </div>
-              <div class="grid grid-cols-2 gap-3 text-xs">
+              <div class="grid grid-cols-3 gap-2 text-xs">
                 <div>
                   <label class="text-slate-400 text-[10px] uppercase">Độ khó:</label>
                   <select id="diffR3" class="w-full mt-1 bg-arena-800 border border-slate-700 rounded-lg p-1.5 text-white">
@@ -335,10 +389,20 @@
                   </select>
                 </div>
                 <div>
+                  <label class="text-slate-400 text-[10px] uppercase">Số câu:</label>
+                  <select id="countR3" class="w-full mt-1 bg-arena-800 border border-slate-700 rounded-lg p-1.5 text-cyan-300 font-bold">
+                    <option value="2">2 câu</option>
+                    <option value="4" selected>4 câu</option>
+                    <option value="6">6 câu</option>
+                    <option value="8">8 câu</option>
+                    <option value="10">10 câu</option>
+                  </select>
+                </div>
+                <div>
                   <label class="text-slate-400 text-[10px] uppercase">Thời gian/câu:</label>
-                  <div class="flex items-center gap-2 mt-1">
+                  <div class="flex items-center gap-1 mt-1">
                     <input type="range" id="timeR3" min="15" max="60" value="30" oninput="document.getElementById('lblTimeR3').innerText = this.value + 's'" class="flex-1 accent-cyan-400" />
-                    <span id="lblTimeR3" class="text-cyan-400 font-mono w-8 text-right font-bold">30s</span>
+                    <span id="lblTimeR3" class="text-cyan-400 font-mono text-xs w-7 text-right font-bold">30s</span>
                   </div>
                 </div>
               </div>
@@ -348,9 +412,9 @@
             <div class="bg-arena-900 p-4 rounded-xl border border-slate-700/80 space-y-3">
               <div class="flex items-center justify-between font-bold text-xs text-emerald-400">
                 <span>VÒNG 4: VỀ ĐÍCH</span>
-                <span class="text-slate-400 font-normal">Phản biện & Cược sao</span>
+                <span class="text-slate-400 font-normal">Chuyên sâu & Cược sao</span>
               </div>
-              <div class="grid grid-cols-2 gap-3 text-xs">
+              <div class="grid grid-cols-3 gap-2 text-xs">
                 <div>
                   <label class="text-slate-400 text-[10px] uppercase">Độ khó:</label>
                   <select id="diffR4" class="w-full mt-1 bg-arena-800 border border-slate-700 rounded-lg p-1.5 text-white">
@@ -361,10 +425,19 @@
                   </select>
                 </div>
                 <div>
+                  <label class="text-slate-400 text-[10px] uppercase">Số câu:</label>
+                  <select id="countR4" class="w-full mt-1 bg-arena-800 border border-slate-700 rounded-lg p-1.5 text-cyan-300 font-bold">
+                    <option value="2">2 câu</option>
+                    <option value="3" selected>3 câu</option>
+                    <option value="5">5 câu</option>
+                    <option value="8">8 câu</option>
+                  </select>
+                </div>
+                <div>
                   <label class="text-slate-400 text-[10px] uppercase">Thời gian/câu:</label>
-                  <div class="flex items-center gap-2 mt-1">
+                  <div class="flex items-center gap-1 mt-1">
                     <input type="range" id="timeR4" min="20" max="90" value="45" oninput="document.getElementById('lblTimeR4').innerText = this.value + 's'" class="flex-1 accent-cyan-400" />
-                    <span id="lblTimeR4" class="text-cyan-400 font-mono w-8 text-right font-bold">45s</span>
+                    <span id="lblTimeR4" class="text-cyan-400 font-mono text-xs w-7 text-right font-bold">45s</span>
                   </div>
                 </div>
               </div>
@@ -892,6 +965,32 @@
         const b = data.bloom_taxonomy_counts || {};
         document.getElementById('lobbyBloomBadge').innerText = `Bloom: ${b.REMEMBER || 0} Nhận biết, ${b.UNDERSTAND || 0} Thông hiểu, ${b.APPLY || 0} Vận dụng, ${b.ANALYZE_EVALUATE || 0} Phản biện`;
 
+        // Xử lý Fast-Import nếu là bộ đề Markdown có sẵn
+        const fastBanner = document.getElementById('fastImportBanner');
+        const topicSection = document.getElementById('topicFilterSection');
+        const topicSelect = document.getElementById('topicFilterSelect');
+
+        if (data.is_direct_quiz) {
+          fastBanner.classList.remove('hidden');
+          document.getElementById('fastImportCount').innerText = data.total_quiz_questions;
+          
+          if (data.topics && data.topics.length > 0) {
+            topicSelect.innerHTML = '<option value="ALL">Toàn bộ các phần trong bộ đề (' + data.total_quiz_questions + ' câu)</option>';
+            data.topics.forEach(top => {
+              const opt = document.createElement('option');
+              opt.value = top;
+              opt.innerText = top;
+              topicSelect.appendChild(opt);
+            });
+            topicSection.classList.remove('hidden');
+          } else {
+            topicSection.classList.add('hidden');
+          }
+        } else {
+          fastBanner.classList.add('hidden');
+          topicSection.classList.add('hidden');
+        }
+
         document.getElementById('uploadScreen').classList.add('hidden');
         document.getElementById('lobbyScreen').classList.remove('hidden');
         document.getElementById('viewConceptMapBtn').classList.remove('hidden');
@@ -957,12 +1056,14 @@
 
       const configPayload = {
         match_mode: appState.matchMode === 'MULTIPLAYER_ARENA' ? 'ARENA_COMPETITION' : appState.matchMode,
-        practice_filter: document.getElementById('practiceFilterSelect').value,
+        practice_filter: document.getElementById('practiceFilterSelect')?.value || 'ALL_ROUNDS',
+        topic_filter: document.getElementById('topicFilterSelect')?.value || 'ALL',
+        practice_order: document.getElementById('practiceOrderSelect')?.value || 'sequential',
         round_configs: [
-          { round_number: 1, difficulty: document.getElementById('diffR1').value, time_limit_sec: parseInt(document.getElementById('timeR1').value), question_count: 8 },
-          { round_number: 2, difficulty: document.getElementById('diffR2').value, time_limit_sec: parseInt(document.getElementById('timeR2').value), question_count: 4 },
-          { round_number: 3, difficulty: document.getElementById('diffR3').value, time_limit_sec: parseInt(document.getElementById('timeR3').value), question_count: 4 },
-          { round_number: 4, difficulty: document.getElementById('diffR4').value, time_limit_sec: parseInt(document.getElementById('timeR4').value), question_count: 3 },
+          { round_number: 1, difficulty: document.getElementById('diffR1').value, time_limit_sec: parseInt(document.getElementById('timeR1').value), question_count: parseInt(document.getElementById('countR1')?.value || 8) },
+          { round_number: 2, difficulty: document.getElementById('diffR2').value, time_limit_sec: parseInt(document.getElementById('timeR2').value), question_count: parseInt(document.getElementById('countR2')?.value || 4) },
+          { round_number: 3, difficulty: document.getElementById('diffR3').value, time_limit_sec: parseInt(document.getElementById('timeR3').value), question_count: parseInt(document.getElementById('countR3')?.value || 4) },
+          { round_number: 4, difficulty: document.getElementById('diffR4').value, time_limit_sec: parseInt(document.getElementById('timeR4').value), question_count: parseInt(document.getElementById('countR4')?.value || 3) },
         ]
       };
 

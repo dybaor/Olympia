@@ -16,12 +16,12 @@ if %ERRORLEVEL% EQU 0 (
     python run_arena.py
 ) else (
     echo [THONG BAO] May tinh khong co Python. Dang khoi chay ban Standalone Portable EXE...
-    if exist "dist\\OlympicArena\\OlympicArena.exe" (
+    if exist "dist\\Olympic_Portable\\Olympic_Portable.exe" (
+        cd /d "%~dp0dist\\Olympic_Portable"
+        Olympic_Portable.exe
+    ) else if exist "dist\\OlympicArena\\OlympicArena.exe" (
         cd /d "%~dp0dist\\OlympicArena"
         OlympicArena.exe
-    ) else if exist "dist\\ArenaOlympic\\ArenaOlympic.exe" (
-        cd /d "%~dp0dist\\ArenaOlympic"
-        ArenaOlympic.exe
     ) else (
         echo [ERROR] Khong tim thay file thuc thi Portable!
         pause
@@ -42,12 +42,12 @@ echo.
 
 start http://localhost:8000
 
-if exist "dist\\OlympicArena\\OlympicArena.exe" (
+if exist "dist\\Olympic_Portable\\Olympic_Portable.exe" (
+    cd /d "%~dp0dist\\Olympic_Portable"
+    Olympic_Portable.exe
+) else if exist "dist\\OlympicArena\\OlympicArena.exe" (
     cd /d "%~dp0dist\\OlympicArena"
     OlympicArena.exe
-) else if exist "dist\\ArenaOlympic\\ArenaOlympic.exe" (
-    cd /d "%~dp0dist\\ArenaOlympic"
-    ArenaOlympic.exe
 ) else (
     echo [ERROR] Khong tim thay file thuc thi Portable!
     pause
@@ -60,4 +60,4 @@ with open('start_arena.bat', 'wb') as f:
 with open('Chay_Khong_Can_Python.bat', 'wb') as f:
     f.write(portable_bat.replace('\r\n', '\n').replace('\n', '\r\n').encode('ascii'))
 
-print("Updated bat files successfully.")
+print("Updated bat files successfully pointing to Olympic_Portable.")

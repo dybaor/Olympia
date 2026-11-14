@@ -37,16 +37,20 @@ def setup_match(
 
     bundle = ExtractedKnowledgeBundle.model_validate_json(doc_record.extracted_bundle_json)
 
-    # Khởi tạo Agent 2 và Agent 3 sinh đề theo cấu hình
-    architect = DynamicOlympicArchitect(bundle)
-    critic = AdversarialFactChecker(bundle)
-
-    exam = architect.generate_full_olympic_exam(config)
-
-    # Thẩm định chất lượng qua Critic
     critic_reports = {}
-    for r in exam.rounds:
-        critic_reports[r.round_number] = critic.audit_round(r)
+    if bundle.is_direct_quiz:
+        from app.services.md_quiz_parser import DirectMDQuizParser
+        exam = DirectMDQuizParser.build_olympic_exam(bundle, config)
+    else:
+        # Khởi tạo Agent 2 và Agent 3 sinh đề theo cấu hình
+        architect = DynamicOlympicArchitect(bundle)
+        critic = AdversarialFactChecker(bundle)
+
+        exam = architect.generate_full_olympic_exam(config)
+
+        # Thẩm định chất lượng qua Critic
+        for r in exam.rounds:
+            critic_reports[r.round_number] = critic.audit_round(r)
 
     exam_id = f"EXAM_{uuid.uuid4().hex[:8]}"
     critic_dict = {str(k): v.model_dump() for k, v in critic_reports.items()}

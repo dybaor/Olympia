@@ -515,6 +515,12 @@ class DynamicOlympicArchitect:
 
     def generate_full_olympic_exam(self, match_config: UserMatchConfig = None) -> FullOlympicExam:
         cfg = match_config or UserMatchConfig()
+
+        # NẾU LÀ BỘ ĐỀ TRẮC NGHIỆM MARKDOWN SẴN -> KHÓA LUỒNG SINH KHUÔN MẪU, DÙNG 100% CÂU HỎI GỐC
+        if getattr(self.bundle, "is_direct_quiz", False):
+            from app.services.md_quiz_parser import DirectMDQuizParser
+            return DirectMDQuizParser.build_olympic_exam(self.bundle, cfg)
+
         cfg_map: Dict[int, RoundConfig] = {rc.round_number: rc for rc in cfg.round_configs}
 
         r1 = self.generate_round_1_khoi_dong(cfg_map.get(1))
